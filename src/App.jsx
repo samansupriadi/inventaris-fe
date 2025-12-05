@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  login,
   fetchAssets,
   fetchLoans,
   createAsset,
@@ -24,9 +25,20 @@ import {
   updateUser,
   deleteUser,
   fetchRoles,
+  fetchEntities,
+  createEntity,
+  updateEntity,
+  deleteEntity,
+  fetchPermissions,
+  createRole,
+  updateRole,
+  deleteRole,
+  createPermission,
+  updatePermission,
+  deletePermission,
 } from "./api";
 
-
+import LoginPage from "./components/LoginPage";   
 import Sidebar from "./components/Sidebar";
 import AssetTable from "./components/AssetTable";
 import LoanHistory from "./components/LoanHistory";
@@ -36,6 +48,10 @@ import FundingSourcePage from "./components/FundingSourcePage";
 import LocationPage from "./components/LocationPage";
 import CategoryPage from "./components/CategoryPage";
 import UserPage from "./components/UserPage";
+import EntityPage from "./components/EntityPage";
+import PermissionPage from "./components/PermissionPage";
+import RolePage from "./components/RolePage";
+import QrPrintSheet from "./components/QrPrintSheet.jsx";
 
 
 function App() {
@@ -57,6 +73,62 @@ function App() {
   const [categories, setCategories] = useState([]);
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
+  const [permissions, setPermissions] = useState([]);
+  const [entities, setEntities] = useState([]);
+  const [qrPrintAssets, setQrPrintAssets] = useState(null);
+  // --- STATE PAGINATION ASET ---
+  const [assetPage, setAssetPage] = useState(1);
+  const ASSET_PAGE_SIZE = 10; // misal 10 baris per halaman
+
+
+ // ---------- AUTH ----------
+  const [auth, setAuth] = useState(() => {
+    const saved = localStorage.getItem("auth");
+    if (!saved) return { user: null, token: null };
+    try {
+      return JSON.parse(saved);
+    } catch {
+      return { user: null, token: null };
+    }
+  });
+
+  const isLoggedIn = !!auth.user && !!auth.token;
+
+
+  const handleLogin = async (email, password) => {
+    const data = await login(email, password);  // <== pakai login dari api.js
+    const newAuth = {
+      token: data.token,
+      user: data.user,    // di sini user sudah berisi entity + roles dari backend
+    };
+    setAuth(newAuth);
+    localStorage.setItem("auth", JSON.stringify(newAuth));
+  };
+
+  // print QR satu aset
+  const handlePrintQr = (asset /*, qrTextFromChild */) => {
+    setQrPrintAssets([asset]);
+  };
+
+  // print QR semua aset yang sedang ditampilkan
+  const handleBulkPrintQr = (assetList) => {
+    setQrPrintAssets(assetList);
+  };
+
+
+  const handleLogout = () => {
+    setAuth({ user: null, token: null });
+    localStorage.removeItem("auth");
+
+    // optional: bersihin state lain biar fresh
+    setAssets([]);
+    setLoans([]);
+    setFundingSources([]);
+    setLocations([]);
+    setCategories([]);
+    setUsers([]);
+    setRoles([]);
+  };
 
 
   //--reset filter
@@ -77,15 +149,37 @@ function App() {
   };
 
   // ---------- LOAD DATA ----------
+
+  const loadPermissions = async () => {
+    try {
+      const data = await fetchPermissions();
+      setPermissions(data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+
   const loadAssets = async () => {
     setLoading(true);
     try {
-      const data = await fetchAssets();
+      const entityId = auth.user?.entity?.id || null;   // <== ambil entitas dari user login
+      const data = await fetchAssets(entityId);
       setAssets(data);
     } finally {
       setLoading(false);
     }
   };
+
+  const loadEntities = async () => {
+    try {
+      const data = await fetchEntities();
+      setEntities(data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
 
   const loadLoans = async () => {
     const data = await fetchLoans();
@@ -94,7 +188,8 @@ function App() {
 
   const loadFundingSources = async () => {
     try {
-      const data = await fetchFundingSources();
+      const entityId = auth.user?.entity?.id || null;
+      const data = await fetchFundingSources(entityId);
       setFundingSources(data);
     } catch (err) {
       console.error(err);
@@ -129,7 +224,44 @@ function App() {
   };
 
 
+  const handleCreateRole = async (payload) => {
+    const created = await createRole(payload);
+    await loadRoles();
+    return created;
+  };
+
+  const handleUpdateRole = async (id, payload) => {
+    const updated = await updateRole(id, payload);
+    await loadRoles();
+    return updated;
+  };
+
+  const handleDeleteRole = async (id) => {
+    await deleteRole(id);
+    await loadRoles();
+  };
+
+  const handleCreatePermission = async (payload) => {
+    const created = await createPermission(payload);
+    setPermissions((prev) => [...prev, created]);
+  };
+
+const handleUpdatePermission = async (id, payload) => {
+  const updated = await updatePermission(id, payload);
+  setPermissions((prev) =>
+    prev.map((p) => (p.id === updated.id ? updated : p))
+  );
+};
+
+const handleDeletePermission = async (id) => {
+  await deletePermission(id);
+  setPermissions((prev) => prev.filter((p) => p.id !== id));
+};
+
+
   useEffect(() => {
+    if (!isLoggedIn) return;  
+
     loadAssets();
     loadLoans();
     loadFundingSources();
@@ -137,7 +269,11 @@ function App() {
     loadCategories();
     loadUsers();
     loadRoles();
-  }, []);
+    loadEntities(); 
+    loadPermissions();
+  }, [isLoggedIn]);
+
+
 
   // ---------- CREATE ASET ----------
   const handleCreateAsset = async (payload, photoFile, receiptFile) => {
@@ -443,6 +579,31 @@ function App() {
     };
 
 
+      // ---------- ENTITAS ----------
+    const handleCreateEntity = async (payload) => {
+      const created = await createEntity(payload);
+      setEntities((prev) => [...prev, created]);
+    };
+
+    const handleUpdateEntity = async (id, payload) => {
+      const updated = await updateEntity(id, payload);
+      setEntities((prev) =>
+        prev.map((e) => (e.id === updated.id ? updated : e))
+      );
+    };
+
+    const handleDeleteEntity = async (id) => {
+      await deleteEntity(id);
+      setEntities((prev) => prev.filter((e) => e.id !== id));
+    };
+
+
+    // ---------- LOGIN GATE ----------
+    if (!isLoggedIn) {
+      return <LoginPage onLoginSuccess={handleLogin} />;
+    }
+
+
   // ---------- RENDER ----------
   return (
     <div className="min-h-screen bg-slate-100 flex">
@@ -492,259 +653,276 @@ function App() {
                 ? "Assets"
                 : activeMenu === "funding"
                 ? "Sumber Dana"
+                : activeMenu === "entities"
+                ? "Entitas"
                 : activeMenu === "locations"
                 ? "Lokasi"
                 : activeMenu === "categories"
                 ? "Kategori Aset"
-                : "Users"}
+                : activeMenu === "roles"
+                ? "Roles & Hak Akses"
+                : activeMenu === "users"
+                ? "Users"
+                : "Permissions"}
             </span>
           </div>
           <div className="flex items-center gap-3 text-xs text-slate-500">
-            <span>Admin</span>
-            <div className="w-7 h-7 rounded-full bg-slate-300" />
+            <span>{auth.user?.name || "User"}</span>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="px-2 py-1 border rounded bg-slate-50 hover:bg-slate-100"
+            >
+              Logout
+            </button>
           </div>
         </header>
 
         {/* PAGE CONTENT */}
         <main className="flex-1 p-4 md:p-6">
-          <div className="max-w-6xl mx-auto space-y-6">
-            {/* DASHBOARD */}
-            {activeMenu === "dashboard" && (
-              <>
-                <div>
-                  <h1 className="text-2xl font-semibold text-slate-800">
-                    Dashboard
-                  </h1>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Ringkasan aset dan aktivitas peminjaman.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-3 text-sm">
-                    <div className="text-xs text-slate-500">
-                      Total aset
-                    </div>
-                    <div className="text-xl font-semibold">
-                      {assets.length}
-                    </div>
-                  </div>
-                  <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-3 text-sm">
-                    <div className="text-xs text-slate-500">
-                      Sedang dipinjam
-                    </div>
-                    <div className="text-xl font-semibold">
-                      {assets.filter((a) => a.status === "borrowed").length}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Rekap per sumber dana */}
-                <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-4">
-                  <h2 className="text-sm font-semibold mb-2">
-                    Rekap nilai aset per sumber dana
-                  </h2>
-
-                  {fundingSummary.length === 0 ? (
-                    <p className="text-xs text-slate-400">
-                      Belum ada sumber dana / aset.
-                    </p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs md:text-sm">
-                        <thead>
-                          <tr className="border-b">
-                            <th className="text-left p-2">
-                              Sumber Dana
-                            </th>
-                            <th className="text-right p-2">
-                              Jumlah Aset
-                            </th>
-                            <th className="text-right p-2">
-                              Total Nilai (Rp)
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {fundingSummary.map((row) => (
-                            <tr key={row.id} className="border-b">
-                              <td className="p-2">{row.name}</td>
-                              <td className="p-2 text-right">
-                                {row.count}
-                              </td>
-                              <td className="p-2 text-right">
-                                {row.totalValue.toLocaleString("id-ID")}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-
-                <LoanHistory loans={loans} />
-              </>
-            )}
-
-            {/* ASSETS */}
-            {activeMenu === "assets" && (
-              <>
-                {/* Header + filter sumber dana + tombol */}
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h1 className="text-2xl font-semibold text-slate-800">
-                      Assets
-                    </h1>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Kelola daftar aset, foto, dan peminjaman.
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {/* Filter sumber dana */}
-                    <select
-                      className="border rounded px-2 py-1 text-xs"
-                      value={selectedFundingFilter}
-                      onChange={(e) => setSelectedFundingFilter(e.target.value)}
-                    >
-                      <option value="all">Semua sumber dana</option>
-                      {fundingSources.map((fs) => (
-                        <option key={fs.id} value={fs.id}>
-                          {fs.name}
-                        </option>
-                      ))}
-                    </select>
-
-                    {/* Export */}
-                    <button
-                      type="button"
-                      onClick={handleExportCsv}
-                      className="px-3 py-2 text-sm rounded-lg border text-slate-700 bg-white hover:bg-slate-50"
-                    >
-                      Export CSV
-                    </button>
-
-                    {/* Tambah aset */}
-                    <button
-                      type="button"
-                      onClick={() => setAddModalOpen(true)}
-                      className="px-3 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
-                    >
-                      + Tambah Aset
-                    </button>
-                  </div>
-                </div>
-
-                {/* 🔍 Pencarian + filter kondisi + filter lokasi */}
-                <div className="bg-white shadow rounded-xl p-4 mb-4">
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
-                    {/* SEARCH */}
-                    <input
-                      className="border px-3 py-2 rounded"
-                      placeholder="Cari nama atau kode aset..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                    />
-
-                    {/* FILTER KONDISI */}
-                    <select
-                      className="border px-3 py-2 rounded"
-                      value={filterCondition}
-                      onChange={(e) => setFilterCondition(e.target.value)}
-                    >
-                      <option value="">Semua kondisi</option>
-                      <option value="baik">Baik</option>
-                      <option value="rusak">Rusak</option>
-                      <option value="cukup">Cukup</option>
-                      <option value="maintenance">Maintenance</option>
-                    </select>
-
-                    {/* FILTER LOKASI */}
-                    <select
-                      className="border px-3 py-2 rounded"
-                      value={filterLocation}
-                      onChange={(e) => setFilterLocation(e.target.value)}
-                    >
-                      <option value="">Semua lokasi</option>
-                      {locations.map((loc) => (
-                        <option key={loc.id} value={loc.id}>
-                          {loc.name}
-                        </option>
-                      ))}
-                    </select>
-
-                    {/* TOMBOL RESET */}
-                    <div className="flex items-center">
-                      <button
-                        type="button"
-                        onClick={handleResetFilters}
-                        className="w-full md:w-auto border px-3 py-2 rounded text-xs text-slate-700 bg-slate-50 hover:bg-slate-100"
-                      >
-                        Reset filter
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Tabel aset */}
-                <AssetTable
-                  assets={filteredAssets}
-                  loading={loading}
-                  onUploadPhoto={handleUploadPhoto}
-                  onBorrow={handleBorrow}
-                  onReturn={handleReturn}
-                  onShowDetail={setSelectedAsset}
-                  onPreviewPhoto={setPreviewUrl}
-                  fundingSources={fundingSources}
-                  locations={locations}
-                  categories={categories}
-                />
-              </>
-            )}
-
-
-            {/* SUMBER DANA */}
-            {activeMenu === "funding" && (
-              <FundingSourcePage
+          <div className="w-full max-w-7xl mx-auto space-y-6">
+            {/* 👇 kalau lagi mode print QR, tampilkan QrPrintSheet saja */}
+            {qrPrintAssets ? (
+              <QrPrintSheet
+                assets={qrPrintAssets}
                 fundingSources={fundingSources}
-                onCreate={handleCreateFundingSource}
-                onUpdate={handleUpdateFundingSource}
-                onDelete={handleDeleteFundingSource}
-              />
-            )}
-
-            {/* LOKASI */}
-            {activeMenu === "locations" && (
-              <LocationPage
                 locations={locations}
-                onCreate={handleCreateLocation}
-                onUpdate={handleUpdateLocation}
-                onDelete={handleDeleteLocation}
-              />
-            )}
-            {/* KATEGORI ASET */}
-            {activeMenu === "categories" && (
-              <CategoryPage
                 categories={categories}
-                onCreate={handleCreateCategory}
-                onUpdate={handleUpdateCategory}
-                onDelete={handleDeleteCategory}
+                onBack={() => setQrPrintAssets(null)}
               />
-            )}
-            {/* USERS */}
-            {activeMenu === "users" && (
-              <UserPage
-                users={users}
-                roles={roles}
-                onCreate={handleCreateUser}
-                onUpdate={handleUpdateUser}
-                onDelete={handleDeleteUser}
-              />
+            ) : (
+              <div className="max-w-6xl mx-auto space-y-6">
+                {/* DASHBOARD */}
+                {activeMenu === "dashboard" && (
+                  <>
+                    <div>
+                      <h1 className="text-2xl font-semibold text-slate-800">
+                        Dashboard
+                      </h1>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Ringkasan aset dan aktivitas peminjaman.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-3 text-sm">
+                        <div className="text-xs text-slate-500">
+                          Total aset
+                        </div>
+                        <div className="text-xl font-semibold">
+                          {assets.length}
+                        </div>
+                      </div>
+                      <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-3 text-sm">
+                        <div className="text-xs text-slate-500">
+                          Sedang dipinjam
+                        </div>
+                        <div className="text-xl font-semibold">
+                          {assets.filter((a) => a.status === "borrowed").length}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Rekap per sumber dana */}
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-4">
+                      <h2 className="text-sm font-semibold mb-2">
+                        Rekap nilai aset per sumber dana
+                      </h2>
+
+                      {fundingSummary.length === 0 ? (
+                        <p className="text-xs text-slate-400">
+                          Belum ada sumber dana / aset.
+                        </p>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs md:text-sm">
+                            <thead>
+                              <tr className="border-b">
+                                <th className="text-left p-2">
+                                  Sumber Dana
+                                </th>
+                                <th className="text-right p-2">
+                                  Jumlah Aset
+                                </th>
+                                <th className="text-right p-2">
+                                  Total Nilai (Rp)
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {fundingSummary.map((row) => (
+                                <tr key={row.id} className="border-b">
+                                  <td className="p-2">{row.name}</td>
+                                  <td className="p-2 text-right">
+                                    {row.count}
+                                  </td>
+                                  <td className="p-2 text-right">
+                                    {row.totalValue.toLocaleString("id-ID")}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* <LoanHistory loans={loans} /> */}
+                  </>
+                )}
+
+                {/* ASSETS */}
+                {activeMenu === "assets" && (
+                  <>
+                    {/* Header + filter sumber dana + tombol */}
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h1 className="text-2xl font-semibold text-slate-800">
+                          Assets
+                        </h1>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Kelola daftar aset, foto, dan peminjaman.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {/* Filter sumber dana */}
+                        <select
+                          className="border rounded px-2 py-1 text-xs"
+                          value={selectedFundingFilter}
+                          onChange={(e) =>
+                            setSelectedFundingFilter(e.target.value)
+                          }
+                        >
+                          <option value="all">Semua sumber dana</option>
+                          {fundingSources.map((fs) => (
+                            <option key={fs.id} value={fs.id}>
+                              {fs.name}
+                            </option>
+                          ))}
+                        </select>
+
+                        {/* Export */}
+                        <button
+                          type="button"
+                          onClick={handleExportCsv}
+                          className="px-3 py-2 text-sm rounded-lg border text-slate-700 bg-white hover:bg-slate-50"
+                        >
+                          Export CSV
+                        </button>
+
+                        {/* Tambah aset */}
+                        <button
+                          type="button"
+                          onClick={() => setAddModalOpen(true)}
+                          className="px-3 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
+                        >
+                          + Tambah Aset
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 🔍 Pencarian + filter kondisi + filter lokasi */}
+                    <div className="bg-white shadow rounded-xl p-4 mb-4">
+                      {/* ... filter yang tadi ... */}
+                    </div>
+
+                    {/* Tabel aset */}
+                    <AssetTable
+                      assets={filteredAssets}
+                      loading={loading}
+                      onUploadPhoto={handleUploadPhoto}
+                      onBorrow={handleBorrow}
+                      onReturn={handleReturn}
+                      onShowDetail={setSelectedAsset}
+                      onPreviewPhoto={setPreviewUrl}
+                      fundingSources={fundingSources}
+                      locations={locations}
+                      categories={categories}
+                      // 👇 tambahan ini penting
+                      onPrintQr={handlePrintQr}
+                      onBulkPrintQr={handleBulkPrintQr}
+                    />
+                  </>
+                )}
+
+                {/* SUMBER DANA */}
+                {activeMenu === "funding" && (
+                  <FundingSourcePage
+                    fundingSources={fundingSources}
+                    entities={entities}
+                    onCreate={handleCreateFundingSource}
+                    onUpdate={handleUpdateFundingSource}
+                    onDelete={handleDeleteFundingSource}
+                  />
+                )}
+
+                {/* LOKASI */}
+                {activeMenu === "locations" && (
+                  <LocationPage
+                    locations={locations}
+                    onCreate={handleCreateLocation}
+                    onUpdate={handleUpdateLocation}
+                    onDelete={handleDeleteLocation}
+                  />
+                )}
+
+                {/* KATEGORI ASET */}
+                {activeMenu === "categories" && (
+                  <CategoryPage
+                    categories={categories}
+                    onCreate={handleCreateCategory}
+                    onUpdate={handleUpdateCategory}
+                    onDelete={handleDeleteCategory}
+                  />
+                )}
+
+                {activeMenu === "roles" && (
+                  <RolePage
+                    roles={roles}
+                    permissions={permissions}
+                    onCreate={handleCreateRole}
+                    onUpdate={handleUpdateRole}
+                    onDelete={handleDeleteRole}
+                  />
+                )}
+
+                {activeMenu === "permissions" && (
+                  <PermissionPage
+                    permissions={permissions}
+                    onCreate={handleCreatePermission}
+                    onUpdate={handleUpdatePermission}
+                    onDelete={handleDeletePermission}
+                  />
+                )}
+
+                {/* USERS */}
+                {activeMenu === "users" && (
+                  <UserPage
+                    users={users}
+                    roles={roles}
+                    entities={entities}
+                    onCreate={handleCreateUser}
+                    onUpdate={handleUpdateUser}
+                    onDelete={handleDeleteUser}
+                  />
+                )}
+
+                {/* ENTITAS */}
+                {activeMenu === "entities" && (
+                  <EntityPage
+                    entities={entities}
+                    onCreate={handleCreateEntity}
+                    onUpdate={handleUpdateEntity}
+                    onDelete={handleDeleteEntity}
+                  />
+                )}
+              </div>
             )}
           </div>
         </main>
       </div>
+
 
       {/* MODAL PREVIEW FOTO */}
       {previewUrl && (

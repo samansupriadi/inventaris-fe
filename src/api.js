@@ -1,14 +1,36 @@
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
+// ==== AUTH / LOGIN ======================================
+export async function login(email, password) {
+  const res = await fetch(`${API_BASE_URL}/api/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Gagal login");
+  }
+
+  return res.json();
+}
+
+
 // === ASET ===
-export async function fetchAssets() {
-  const res = await fetch(`${API_BASE_URL}/api/assets`);
+export async function fetchAssets(entityId) {
+  const url = entityId
+    ? `${API_BASE_URL}/api/assets?entity_id=${entityId}`
+    : `${API_BASE_URL}/api/assets`;
+
+  const res = await fetch(url);
   if (!res.ok) {
     throw new Error("Gagal mengambil data aset");
   }
   return res.json();
 }
+
 
 export async function createAsset(asset) {
   const res = await fetch(`${API_BASE_URL}/api/assets`, {
@@ -89,13 +111,18 @@ export async function fetchLoans() {
 }
 
 // === SUMBER DANA ===
-export async function fetchFundingSources() {
-  const res = await fetch(`${API_BASE_URL}/api/funding-sources`);
+export async function fetchFundingSources(entityId) {
+  const url = entityId
+    ? `${API_BASE_URL}/api/funding-sources?entity_id=${entityId}`
+    : `${API_BASE_URL}/api/funding-sources`;
+
+  const res = await fetch(url);
   if (!res.ok) {
     throw new Error("Gagal mengambil sumber dana");
   }
   return res.json();
 }
+
 
 export async function createFundingSource(data) {
   const res = await fetch(`${API_BASE_URL}/api/funding-sources`, {
@@ -269,10 +296,6 @@ export async function deleteCategory(id) {
   return res.json();
 }
 
-
-
-
-
 // ==== ROLES (HAK AKSES) =================================
 
 export async function fetchRoles() {
@@ -282,6 +305,102 @@ export async function fetchRoles() {
   }
   return res.json();
 }
+
+export async function createRole(data) {
+  const res = await fetch(`${API_BASE_URL}/api/roles`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Gagal membuat role");
+  }
+
+  return res.json();
+}
+
+export async function updateRole(id, data) {
+  const res = await fetch(`${API_BASE_URL}/api/roles/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Gagal mengubah role");
+  }
+
+  return res.json();
+}
+
+export async function deleteRole(id) {
+  const res = await fetch(`${API_BASE_URL}/api/roles/${id}`, {
+    method: "DELETE",
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Gagal menghapus role");
+  }
+
+  return res.json();
+}
+
+// ==== PERMISSIONS (HAK AKSES MENU) =========================
+export async function fetchPermissions() {
+  const res = await fetch(`${API_BASE_URL}/api/permissions`);
+  if (!res.ok) {
+    throw new Error("Gagal mengambil data permission");
+  }
+  return res.json();
+}
+
+export async function createPermission(data) {
+  const res = await fetch(`${API_BASE_URL}/api/permissions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Gagal membuat permission");
+  }
+
+  return res.json();
+}
+
+export async function updatePermission(id, data) {
+  const res = await fetch(`${API_BASE_URL}/api/permissions/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Gagal mengubah permission");
+  }
+
+  return res.json();
+}
+
+export async function deletePermission(id) {
+  const res = await fetch(`${API_BASE_URL}/api/permissions/${id}`, {
+    method: "DELETE",
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Gagal menghapus permission");
+  }
+
+  return res.json();
+}
+
 
 // ==== USERS =============================================
 
@@ -408,4 +527,59 @@ export async function deleteBudgetCode(id) {
 
   return res.json();
 }
+
+// ==== ENTITIES =====================================
+
+export async function fetchEntities() {
+  const res = await fetch(`${API_BASE_URL}/api/entities`);
+  if (!res.ok) {
+    throw new Error("Gagal mengambil entitas");
+  }
+  return res.json();
+}
+
+export async function createEntity(data) {
+  const res = await fetch(`${API_BASE_URL}/api/entities`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Gagal membuat entitas");
+  }
+
+  return res.json();
+}
+
+export async function updateEntity(id, data) {
+  const res = await fetch(`${API_BASE_URL}/api/entities/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Gagal mengubah entitas");
+  }
+
+  return res.json();
+}
+
+export async function deleteEntity(id) {
+  const res = await fetch(`${API_BASE_URL}/api/entities/${id}`, {
+    method: "DELETE",
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Gagal menghapus entitas");
+  }
+
+  return res.json();
+}
+
+
 

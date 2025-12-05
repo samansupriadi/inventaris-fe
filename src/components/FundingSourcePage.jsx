@@ -8,6 +8,7 @@ import {
 
 function FundingSourcePage({
   fundingSources,
+  entities,          // <<< TERIMA ENTITIES DI SINI
   onCreate,
   onUpdate,
   onDelete,
@@ -15,13 +16,17 @@ function FundingSourcePage({
   // ---------- STATE SUMBER DANA ----------
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
+  const [entityId, setEntityId] = useState("");        // entitas untuk create
+
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState("");
   const [editCode, setEditCode] = useState("");
+  const [editEntityId, setEditEntityId] = useState(""); // entitas untuk edit
+
   const [error, setError] = useState("");
 
   // ---------- STATE KMA (KODE MATA ANGGARAN) ----------
-  const [budgetCodes, setBudgetCodes] = useState([]); // semua KMA dari server
+  const [budgetCodes, setBudgetCodes] = useState([]);
   const [expandedSourceId, setExpandedSourceId] = useState(null);
 
   const [kmaCode, setKmaCode] = useState("");
@@ -44,13 +49,22 @@ function FundingSourcePage({
     loadBudgetCodes();
   }, []);
 
+  // helper untuk menampilkan nama entitas
+  const getEntityName = (id) => {
+    if (!id || !entities) return "-";
+    const ent = entities.find((e) => String(e.id) === String(id));
+    return ent ? ent.name : "-";
+  };
+
   // ---------- FORM SUMBER DANA ----------
   const resetForm = () => {
     setName("");
     setCode("");
+    setEntityId("");
     setEditingId(null);
     setEditName("");
     setEditCode("");
+    setEditEntityId("");
     setError("");
   };
 
@@ -63,8 +77,17 @@ function FundingSourcePage({
       return;
     }
 
+    if (!entityId) {
+      setError("Entitas sumber dana wajib dipilih");
+      return;
+    }
+
     try {
-      await onCreate({ name, code });
+      await onCreate({
+        name,
+        code,
+        entity_id: entityId,
+      });
       resetForm();
     } catch (err) {
       setError(err.message || "Gagal menyimpan sumber dana");
@@ -75,6 +98,7 @@ function FundingSourcePage({
     setEditingId(fs.id);
     setEditName(fs.name);
     setEditCode(fs.code || "");
+    setEditEntityId(fs.entity_id || "");
     setError("");
   };
 
@@ -87,10 +111,16 @@ function FundingSourcePage({
       return;
     }
 
+    if (!editEntityId) {
+      setError("Entitas sumber dana wajib dipilih");
+      return;
+    }
+
     try {
       await onUpdate(editingId, {
         name: editName,
         code: editCode,
+        entity_id: editEntityId,
       });
       resetForm();
     } catch (err) {
@@ -158,9 +188,7 @@ function FundingSourcePage({
       await loadBudgetCodes();
       resetKmaForm();
     } catch (err) {
-      setKmaError(
-        err.message || "Gagal menyimpan kode mata anggaran"
-      );
+      setKmaError(err.message || "Gagal menyimpan kode mata anggaran");
     }
   };
 
@@ -192,7 +220,8 @@ function FundingSourcePage({
           Sumber Dana
         </h1>
         <p className="text-xs text-slate-500 mt-1">
-          Kelola kategori sumber dana (ZAKAT, INFAK, AMIL, WAKAF, dll) dan kode mata anggaran (KMA).
+          Kelola kategori sumber dana (ZAKAT, INFAK, AMIL, WAKAF, dll) dan kode
+          mata anggaran (KMA), per entitas.
         </p>
       </div>
 
@@ -208,7 +237,7 @@ function FundingSourcePage({
 
         <form
           onSubmit={editingId ? handleEditSubmit : handleCreate}
-          className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm"
+          className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm"
         >
           <div>
             <label className="block text-xs mb-1">Nama</label>
@@ -240,10 +269,37 @@ function FundingSourcePage({
             />
           </div>
 
+          <div>
+            <label className="block text-xs mb-1">Entitas</label>
+            {entities && entities.length > 0 ? (
+              <select
+                className="border rounded w-full px-2 py-1.5"
+                value={editingId ? editEntityId : entityId}
+                onChange={(e) =>
+                  editingId
+                    ? setEditEntityId(e.target.value)
+                    : setEntityId(e.target.value)
+                }
+              >
+                <option value="">Pilih entitas...</option>
+                {entities.map((ent) => (
+                  <option key={ent.id} value={ent.id}>
+                    {ent.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="text-[11px] text-amber-600">
+                Belum ada entitas. Tambahkan dulu di menu Entitas.
+              </div>
+            )}
+          </div>
+
           <div className="flex items-end gap-2">
             <button
               type="submit"
               className="px-3 py-2 text-xs rounded bg-blue-600 text-white hover:bg-blue-700"
+              disabled={!entities || entities.length === 0}
             >
               {editingId ? "Simpan Perubahan" : "Tambah"}
             </button>
@@ -277,6 +333,7 @@ function FundingSourcePage({
                 <tr className="border-b">
                   <th className="text-left p-2">No</th>
                   <th className="text-left p-2">Tipe Dana</th>
+                  <th className="text-left p-2">Entitas</th>
                   <th className="text-left p-2">Kode</th>
                   <th className="text-left p-2">Aksi</th>
                 </tr>
@@ -293,6 +350,9 @@ function FundingSourcePage({
                       <tr className="border-b">
                         <td className="p-2">{idx + 1}</td>
                         <td className="p-2">{fs.name}</td>
+                        <td className="p-2">
+                          {getEntityName(fs.entity_id)}
+                        </td>
                         <td className="p-2">{fs.code}</td>
                         <td className="p-2 space-x-2">
                           <button
@@ -323,7 +383,7 @@ function FundingSourcePage({
 
                       {expanded && (
                         <tr className="bg-slate-50 border-b">
-                          <td colSpan={4} className="p-3">
+                          <td colSpan={5} className="p-3">
                             <div className="text-xs font-semibold mb-2">
                               Kode Mata Anggaran untuk {fs.name} ({fs.code})
                             </div>
@@ -406,10 +466,7 @@ function FundingSourcePage({
                                 </thead>
                                 <tbody>
                                   {kmaForFs.map((kma) => (
-                                    <tr
-                                      key={kma.id}
-                                      className="border-b"
-                                    >
+                                    <tr key={kma.id} className="border-b">
                                       <td className="p-2">
                                         {kma.code}
                                       </td>

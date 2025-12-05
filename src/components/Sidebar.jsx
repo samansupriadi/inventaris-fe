@@ -3,9 +3,12 @@ function Sidebar({ activeMenu, onChange, className = "" }) {
     { id: "dashboard", label: "Dashboard" },
     { id: "assets", label: "Assets" },
     { id: "funding", label: "Sumber Dana" },
-    { id: "locations", label: "Lokasi" },  
+    { id: "entities", label: "Entitas" },       
+    { id: "locations", label: "Lokasi" },
     { id: "categories", label: "Kategori Aset" },
+    { id: "roles", label: "Roles & Hak Akses" },
     { id: "users", label: "Users" },
+    { id: "permissions", label: "Permissions" }, 
   ];
 
   return (
@@ -15,7 +18,7 @@ function Sidebar({ activeMenu, onChange, className = "" }) {
         className
       }
     >
-      {/* Brand - klik untuk ke Dashboard */}
+      {/* Brand */}
       <button
         type="button"
         onClick={() => onChange("dashboard")}
@@ -28,7 +31,9 @@ function Sidebar({ activeMenu, onChange, className = "" }) {
           <div className="text-sm font-semibold leading-tight">
             Inventaris NGO
           </div>
-          <div className="text-[11px] text-slate-400">Asset Management</div>
+          <div className="text-[11px] text-slate-400">
+            Asset Management
+          </div>
         </div>
       </button>
 
@@ -55,11 +60,19 @@ function Sidebar({ activeMenu, onChange, className = "" }) {
                   ? "📦"
                   : item.id === "funding"
                   ? "💰"
+                  : item.id === "entities"
+                  ? "🏛️"        
                   : item.id === "locations"
                   ? "🏢"
                   : item.id === "categories"
                   ? "🏷️"
-                  : "👤"}
+                  : item.id === "roles"
+                  ? "🛡️"
+                  : item.id === "users"
+                  ? "👤"
+                  : item.id === "roles"
+                  ? "🛡️"
+                  : "✅"}
               </span>
               <span>{item.label}</span>
             </button>
