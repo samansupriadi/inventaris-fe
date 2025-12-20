@@ -63,11 +63,11 @@ function AssetsPage({
   ).length;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6 font-sans">
       {/* Header + tombol kanan */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-800">Assets</h1>
+          <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Assets</h1>
           <p className="text-xs text-slate-500 mt-1">
             Kelola daftar aset, foto, peminjaman, dan QR code.
           </p>
@@ -76,7 +76,7 @@ function AssetsPage({
         <div className="flex flex-wrap items-center gap-2">
           {/* Filter sumber dana di header */}
           <select
-            className="border rounded px-2 py-1 text-xs"
+            className="border-slate-300 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-[#009846] outline-none"
             value={selectedFundingFilter}
             onChange={(e) => onFundingFilterChange(e.target.value)}
           >
@@ -91,28 +91,29 @@ function AssetsPage({
           <button
             type="button"
             onClick={onExportCsv}
-            className="px-3 py-2 text-xs md:text-sm rounded-lg border text-slate-700 bg-white hover:bg-slate-50"
+            className="px-4 py-2 text-xs md:text-sm rounded-lg border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 transition-colors font-medium"
           >
             Export CSV
           </button>
 
+          {/* TOMBOL TAMBAH ASET (HIJAU SF) */}
           <button
             type="button"
             onClick={onOpenAddModal}
-            className="px-3 py-2 text-xs md:text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
+            className="px-4 py-2 text-xs md:text-sm rounded-lg bg-[#009846] text-white hover:bg-[#007033] shadow-md hover:shadow-lg transition-all font-medium flex items-center gap-2"
           >
-            + Tambah Aset
+            <span>+</span> Tambah Aset
           </button>
         </div>
       </div>
 
       {/* FILTER BAR */}
-      <div className="bg-white shadow rounded-xl p-4 mb-2 space-y-3">
+      <div className="bg-white shadow-sm border border-slate-100 rounded-xl p-5 mb-2 space-y-4">
         {/* Bar 1: search + kondisi + lokasi + status */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
           {/* SEARCH */}
           <input
-            className="border px-3 py-2 rounded"
+            className="border border-slate-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-[#009846] focus:border-[#009846] outline-none transition-all"
             placeholder="Cari nama atau kode aset..."
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
@@ -120,7 +121,7 @@ function AssetsPage({
 
           {/* KONDISI */}
           <select
-            className="border px-3 py-2 rounded"
+            className="border border-slate-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-[#009846] focus:border-[#009846] outline-none"
             value={filterCondition}
             onChange={(e) => onConditionChange(e.target.value)}
           >
@@ -129,11 +130,12 @@ function AssetsPage({
             <option value="cukup">Cukup</option>
             <option value="rusak">Rusak</option>
             <option value="maintenance">Maintenance</option>
+            <option value="hilang">Hilang</option>
           </select>
 
           {/* LOKASI */}
           <select
-            className="border px-3 py-2 rounded"
+            className="border border-slate-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-[#009846] focus:border-[#009846] outline-none"
             value={filterLocation}
             onChange={(e) => onLocationChange(e.target.value)}
           >
@@ -147,7 +149,7 @@ function AssetsPage({
 
           {/* STATUS */}
           <select
-            className="border px-3 py-2 rounded"
+            className="border border-slate-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-[#009846] focus:border-[#009846] outline-none"
             value={filterStatus}
             onChange={(e) => onStatusChange(e.target.value)}
           >
@@ -160,10 +162,10 @@ function AssetsPage({
         </div>
 
         {/* Bar 2: kategori + tahun + tombol reset */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
           {/* KATEGORI */}
           <select
-            className="border px-3 py-2 rounded"
+            className="border border-slate-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-[#009846] focus:border-[#009846] outline-none"
             value={filterCategory}
             onChange={(e) => onCategoryChange(e.target.value)}
           >
@@ -177,7 +179,7 @@ function AssetsPage({
 
           {/* TAHUN (berdasarkan created_at) */}
           <select
-            className="border px-3 py-2 rounded"
+            className="border border-slate-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-[#009846] focus:border-[#009846] outline-none"
             value={filterYear}
             onChange={(e) => onYearChange(e.target.value)}
           >
@@ -197,7 +199,7 @@ function AssetsPage({
             <button
               type="button"
               onClick={onResetFilters}
-              className="w-full md:w-auto border px-3 py-2 rounded text-xs text-slate-700 bg-slate-50 hover:bg-slate-100"
+              className="w-full md:w-auto border px-4 py-2 rounded-lg text-xs font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 hover:text-slate-800 transition-colors"
             >
               Reset filter
             </button>
@@ -205,29 +207,36 @@ function AssetsPage({
         </div>
       </div>
 
-      {/* 🔹 RINGKASAN HASIL FILTER */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs md:text-sm">
-        <div className="bg-white border border-slate-200 rounded-xl px-3 py-2">
-          <div className="text-slate-500">Jumlah aset (hasil filter)</div>
-          <div className="mt-1 text-lg font-semibold text-slate-800">
+      {/* 🔹 RINGKASAN HASIL FILTER (CARD STYLE SF) */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs md:text-sm">
+        {/* Card 1: Jumlah Aset (Hijau) */}
+        <div className="bg-white border-l-4 border-[#009846] rounded-r-xl shadow-sm px-4 py-3 hover:shadow-md transition-shadow">
+          <div className="text-slate-500 font-medium">Jumlah aset</div>
+          <div className="mt-1 text-2xl font-bold text-slate-800">
             {assets.length}
           </div>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl px-3 py-2">
-          <div className="text-slate-500">Total nilai (hasil filter)</div>
-          <div className="mt-1 text-lg font-semibold text-slate-800">
+
+        {/* Card 2: Total Nilai (Biru/Emas) */}
+        <div className="bg-white border-l-4 border-blue-500 rounded-r-xl shadow-sm px-4 py-3 hover:shadow-md transition-shadow">
+          <div className="text-slate-500 font-medium">Total nilai</div>
+          <div className="mt-1 text-xl font-bold text-slate-800">
             Rp {totalFilteredValue.toLocaleString("id-ID")}
           </div>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl px-3 py-2">
-          <div className="text-slate-500">Tersedia</div>
-          <div className="mt-1 text-lg font-semibold text-emerald-700">
+
+        {/* Card 3: Tersedia (Hijau Muda) */}
+        <div className="bg-white border-l-4 border-emerald-400 rounded-r-xl shadow-sm px-4 py-3 hover:shadow-md transition-shadow">
+          <div className="text-slate-500 font-medium">Tersedia</div>
+          <div className="mt-1 text-2xl font-bold text-emerald-600">
             {availableCount}
           </div>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl px-3 py-2">
-          <div className="text-slate-500">Sedang dipinjam</div>
-          <div className="mt-1 text-lg font-semibold text-orange-700">
+
+        {/* Card 4: Sedang Dipinjam (Oranye SF) */}
+        <div className="bg-white border-l-4 border-[#F68D2E] rounded-r-xl shadow-sm px-4 py-3 hover:shadow-md transition-shadow">
+          <div className="text-slate-500 font-medium">Sedang dipinjam</div>
+          <div className="mt-1 text-2xl font-bold text-[#F68D2E]">
             {borrowedCount}
           </div>
         </div>
@@ -235,7 +244,7 @@ function AssetsPage({
 
       {/* TABEL ASET */}
       <AssetTable
-        assets={pageAssets}          
+        assets={pageAssets}
         loading={loading}
         onUploadPhoto={onUploadPhoto}
         onBorrow={onBorrow}
@@ -252,36 +261,36 @@ function AssetsPage({
       />
 
       {/* PAGINATION */}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-2 text-[11px] text-slate-500 mt-2">
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-500 mt-4 border-t pt-4">
         <div>
           Menampilkan{" "}
-          <span className="font-semibold">
+          <span className="font-bold text-slate-700">
             {totalItems === 0 ? 0 : startIndex + 1}
           </span>{" "}
           -{" "}
-          <span className="font-semibold">
+          <span className="font-bold text-slate-700">
             {totalItems === 0 ? 0 : endIndex}
           </span>{" "}
-          dari <span className="font-semibold">{totalItems}</span> aset
+          dari <span className="font-bold text-slate-700">{totalItems}</span> aset
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => onPageChange(Math.max(1, page - 1))}
             disabled={page <= 1}
-            className="px-3 py-1 rounded border text-xs disabled:opacity-40 disabled:cursor-not-allowed bg-white hover:bg-slate-50"
+            className="px-3 py-1.5 rounded-md border text-xs disabled:opacity-40 disabled:cursor-not-allowed bg-white hover:bg-[#009846] hover:text-white hover:border-[#009846] transition-colors"
           >
             &lt; Sebelumnya
           </button>
-          <span>
-            Halaman <span className="font-semibold">{page}</span> / {totalPages}
+          <span className="bg-slate-100 px-3 py-1.5 rounded-md font-medium text-slate-700">
+            Halaman {page} / {totalPages}
           </span>
           <button
             type="button"
             onClick={() => onPageChange(Math.min(totalPages, page + 1))}
             disabled={page >= totalPages}
-            className="px-3 py-1 rounded border text-xs disabled:opacity-40 disabled:cursor-not-allowed bg-white hover:bg-slate-50"
+            className="px-3 py-1.5 rounded-md border text-xs disabled:opacity-40 disabled:cursor-not-allowed bg-white hover:bg-[#009846] hover:text-white hover:border-[#009846] transition-colors"
           >
             Berikutnya &gt;
           </button>

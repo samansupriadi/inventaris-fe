@@ -18,21 +18,35 @@ function Sidebar({ activeMenu, onChange, className = "" }) {
         className
       }
     >
-      {/* Brand */}
+      {/* Brand Sinergi Foundation */}
       <button
         type="button"
         onClick={() => onChange("dashboard")}
-        className="flex items-center gap-2 px-5 py-4 border-b border-slate-800 hover:bg-slate-800/60 text-left"
+        className="flex items-center gap-3 px-5 py-5 border-b border-slate-800 hover:bg-slate-800/60 text-left transition-colors group"
       >
-        <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-xs font-bold">
-          IN
+        {/* Container Logo */}
+        <div className="w-10 h-10 rounded-lg bg-white p-1 flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
+          {/* Pastikan file logo sudah ada di folder public/images/ */}
+          <img 
+            src="/images/logo-sf.png" 
+            alt="SF" 
+            className="w-full h-full object-contain"
+            // Fallback script: Kalau gambar belum ada, otomatis jadi kotak Hijau inisial "SF"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+              e.currentTarget.parentNode.style.backgroundColor = '#009846'; // Hijau SF
+              e.currentTarget.parentNode.innerHTML = '<span class="text-white font-bold text-xs">SF</span>';
+            }}
+          />
         </div>
+        
+        {/* Teks Identitas */}
         <div>
-          <div className="text-sm font-semibold leading-tight">
-            Inventaris NGO
+          <div className="text-sm font-bold text-slate-100 leading-tight">
+            Sinergi Foundation
           </div>
-          <div className="text-[11px] text-slate-400">
-            Asset Management
+          <div className="text-[10px] font-medium text-emerald-500 mt-0.5 tracking-wide">
+            ASSET MANAGEMENT
           </div>
         </div>
       </button>

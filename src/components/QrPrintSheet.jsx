@@ -4,175 +4,142 @@ import QRCode from "react-qr-code";
 function QrPrintSheet({
   assets,
   fundingSources,
-  locations, // dipakai untuk payload QR
-  categories, // dipakai untuk payload QR
+  locations,
+  categories,
   onBack,
 }) {
   if (!assets || assets.length === 0) return null;
 
-  const findFunding = (id) =>
-    id ? fundingSources.find((f) => f.id === id) || null : null;
+  // Helper untuk mencari data pelengkap (biar saat QR discan, infonya tetap lengkap)
+  const findFunding = (id) => fundingSources?.find((f) => f.id === id);
+  const findLocation = (id) => locations?.find((l) => l.id === id);
+  const findCategory = (id) => categories?.find((c) => c.id === id);
 
-  const findLocation = (id) =>
-    id ? locations.find((l) => l.id === id) || null : null;
-
-  const findCategory = (id) =>
-    id ? categories.find((c) => c.id === id) || null : null;
-
-  // Payload QR (tetap lengkap)
   const buildQrPayload = (asset) => {
     const funding = findFunding(asset.funding_source_id);
     const location = findLocation(asset.location_id);
     const category = findCategory(asset.category_id);
 
-    const payload = {
+    // Payload JSON lengkap tersimpan DI DALAM QR
+    return JSON.stringify({
+      id: asset.id,
       name: asset.name,
       code: asset.code,
-      category: category ? category.name : null,
-      category_code: category ? category.code : null,
-      location: location ? location.name : null,
-      detail_location: asset.location || null,
-      condition: asset.condition || null,
-      status: asset.status || null,
-      funding_source: funding ? funding.name : null,
-    };
-
-    return JSON.stringify(payload);
+      loc: location ? location.name : "",
+      cat: category ? category.name : "",
+      fund: funding ? funding.name : "",
+    });
   };
 
   return (
-    <div className="qr-print-root max-w-5xl mx-auto">
-      {/* PRINT CSS (isolasi: hanya QrPrintSheet yang ke-print) */}
+    <div className="min-h-screen bg-gray-100 p-6 font-sans">
+      
+      {/* 1. STYLE KHUSUS PRINT (CSS Magic) */}
       <style>{`
-        @page { size: A4; margin: 10mm; }
-
         @media print {
-          html, body { height: auto !important; }
-          body { background: #fff !important; }
+          @page {
+            size: A4 portrait;
+            margin: 5mm; /* Margin kertas tipis (0.5cm) biar muat banyak */
+          }
+          
+          body {
+            background-color: white !important;
+            -webkit-print-color-adjust: exact;
+          }
 
-          /* Hide ALL by default */
-          body * { visibility: hidden !important; }
+          /* Sembunyikan semua elemen UI browser/app */
+          body * { visibility: hidden; }
 
-          /* Show ONLY this component */
-          .qr-print-root,
-          .qr-print-root * { visibility: visible !important; }
+          /* Tampilkan HANYA area stiker */
+          .print-area, .print-area * { visibility: visible; }
 
-          /* Place printable area at top-left */
-          .qr-print-root { position: absolute; left: 0; top: 0; width: 100%; }
+          .print-area {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+          }
 
-          /* No toolbar on print */
-          .qr-no-print { display: none !important; }
-
-          /* Remove borders/shadows that look ugly on paper (optional) */
-          .qr-label { box-shadow: none !important; }
+          /* Hilangkan tombol UI */
+          .no-print { display: none !important; }
         }
       `}</style>
 
-      {/* Toolbar (non-print) */}
-      <div className="qr-no-print flex items-center justify-between mb-4">
+      {/* 2. HEADER & TOMBOL (Hanya tampil di layar) */}
+      <div className="no-print max-w-[210mm] mx-auto mb-6 bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center">
         <div>
-          <h1 className="text-xl font-semibold text-slate-800">Print QR Aset</h1>
-          <p className="text-xs text-slate-500 mt-1">
-            QR menyimpan info lengkap aset, teks label: nama, kode, sumber.
+          <h1 className="text-lg font-bold text-slate-800">Cetak Label Stiker</h1>
+          <p className="text-xs text-slate-500">
+            Total: <span className="font-bold text-[#009846]">{assets.length} Aset</span>. Siapkan kertas label/stiker A4.
           </p>
         </div>
         <div className="flex gap-2">
           <button
-            type="button"
             onClick={onBack}
-            className="px-3 py-2 text-xs rounded border bg-white hover:bg-slate-50"
+            className="px-4 py-2 text-xs font-medium border border-slate-300 rounded hover:bg-slate-50 transition"
           >
             Kembali
           </button>
           <button
-            type="button"
             onClick={() => window.print()}
-            className="px-3 py-2 text-xs rounded bg-blue-600 text-white hover:bg-blue-700"
+            className="px-4 py-2 text-xs font-medium bg-[#009846] text-white rounded hover:bg-[#007033] shadow-sm flex items-center gap-2"
           >
-            Print
+            🖨️ Print Sekarang
           </button>
         </div>
       </div>
 
-      {/* Grid label */}
-      {/* Ukuran label fixed biar rapi saat print */}
-      <div
-        className="
-          grid gap-3
-          grid-cols-2
-          sm:grid-cols-3
-          md:grid-cols-4
-        "
-      >
-        {assets.map((asset) => {
-          const funding = findFunding(asset.funding_source_id);
-          const sourceLabel = funding ? funding.name.toUpperCase() : "________";
-
-          return (
+      {/* 3. AREA KERTAS A4 (Grid Stiker) */}
+      {/* Lebar 210mm = Lebar A4 */}
+      <div className="print-area max-w-[210mm] mx-auto bg-white shadow-lg print:shadow-none min-h-[297mm] p-[2mm] print:p-0">
+        
+        {/* Container Flex agar stiker menyusun diri secara otomatis */}
+        <div className="flex flex-wrap content-start gap-[2mm]">
+          {assets.map((asset) => (
             <div
               key={asset.id}
-              className="
-                qr-label
-                border rounded-lg
-                flex flex-col items-center text-center
-                bg-white
-              "
+              className="border border-slate-200 rounded-md flex flex-col items-center justify-center text-center relative bg-white"
               style={{
-                // ukuran label (silakan ubah kalau mau lebih besar/kecil)
-                width: "48mm",
-                height: "48mm",
-                padding: "6mm",
-                pageBreakInside: "avoid",
-                breakInside: "avoid",
+                // UKURAN STIKER: 40mm x 40mm (4cm) - Pas untuk label kecil
+                width: "40mm",
+                height: "40mm",
+                pageBreakInside: "avoid", // Jangan terpotong halaman
+                padding: "2mm"
               }}
             >
-              <div style={{ width: "26mm", height: "26mm" }}>
+              {/* QR Code */}
+              {/* Ukuran QR sekitar 2.4cm */}
+              <div style={{ width: "24mm", height: "24mm" }}>
                 <QRCode
                   value={buildQrPayload(asset)}
-                  size={256} // besar internal, di-scale oleh container
-                  style={{ width: "100%", height: "100%" }}
+                  size={256}
+                  style={{ height: "100%", width: "100%" }}
+                  viewBox={`0 0 256 256`}
                 />
               </div>
 
-              <div className="mt-2 leading-tight w-full">
-                <div
-                  className="font-semibold"
-                  style={{
-                    fontSize: "10px",
-                    lineHeight: "12px",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                  title={asset.name}
-                >
-                  {asset.name}
-                </div>
-
-                <div
-                  className="font-mono text-slate-700"
-                  style={{
-                    fontSize: "9px",
-                    lineHeight: "11px",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                  title={asset.code}
+              {/* Info Text (Sangat Minimalis) */}
+              <div className="mt-1.5 w-full overflow-hidden leading-none">
+                {/* Kode Aset (Paling Penting) - Bold */}
+                <div 
+                  className="font-bold text-slate-900 truncate font-mono"
+                  style={{ fontSize: "9px" }}
                 >
                   {asset.code}
                 </div>
-
-                <div
-                  className="text-slate-500 uppercase"
-                  style={{ fontSize: "8px", marginTop: "4px" }}
+                
+                {/* Nama Aset (Opsional, kecil banget) */}
+                <div 
+                  className="text-slate-500 truncate mt-[2px]" 
+                  style={{ fontSize: "7px" }}
                 >
-                  ASSET OF {sourceLabel}
+                  {asset.name}
                 </div>
               </div>
             </div>
-          );
-        })}
+          ))}
+        </div>
+
       </div>
     </div>
   );

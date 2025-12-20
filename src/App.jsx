@@ -447,38 +447,43 @@ function App() {
     setBorrowModalOpen(true);
   };
 
-
-
   const handleSubmitBorrow = async (payload) => {
     try {
       setBorrowLoading(true);
 
       // payload dari modal:
-      // { borrower_user_id, usage_location_id, due_date, photo }
+      // { borrower_user_id, usage_location_id, detail_location, notes, due_date, photo }
 
+      // 1. KIRIM DATA KE BACKEND
       const res = await borrowAsset(borrowAssetTarget.id, {
         borrower_user_id: payload.borrower_user_id,
         usage_location_id: payload.usage_location_id,
         due_date: payload.due_date || null,
+        
+        // Pastikan Backend Anda menerima field ini untuk mengupdate tabel aset
+        detail_location: payload.detail_location, 
+        notes: payload.notes 
       });
 
-      // upload foto kondisi saat ini (before)
+      // 2. UPLOAD FOTO (jika ada)
       if (payload.photo && res?.loan?.id) {
         await uploadLoanBeforePhoto(res.loan.id, payload.photo);
       }
 
-      // update asset di state
-      // backend kamu mengembalikan { asset, loan }
+      // 3. UPDATE STATE FRONTEND (Supaya tabel langsung berubah)
+      // Logikanya: Backend harus mengembalikan objek 'asset' yang sudah terupdate lokasi & detailnya
       if (res?.asset?.id) {
-        setAssets((prev) => prev.map((a) => (a.id === res.asset.id ? res.asset : a)));
+        setAssets((prev) => 
+          prev.map((a) => (a.id === res.asset.id ? res.asset : a))
+        );
       } else {
-        // fallback jika response backend beda
+        // Fallback: Kalau backend tidak mengembalikan objek aset, reload manual
         await loadAssets();
       }
 
-      await loadLoans();
+      await loadLoans(); // Reload history peminjaman
 
-      // close modal
+      // Close modal
       setBorrowModalOpen(false);
       setBorrowAssetTarget(null);
     } catch (err) {
@@ -488,8 +493,6 @@ function App() {
       setBorrowLoading(false);
     }
   };
-
-
 
   // ---------- FOTO ----------
   const handleUploadPhoto = async (assetId, event) => {
@@ -772,37 +775,39 @@ function App() {
 
 
   const handleOpenEdit = (asset) => {
-  setEditAssetTarget(asset);
-  setEditModalOpen(true);
-};
+    setEditAssetTarget(asset);
+    setEditModalOpen(true);
+  };
 
-const handleSubmitEdit = async (payload, photoFile, receiptFile) => {
-  try {
-    let updated = await updateAsset(editAssetTarget.id, payload);
+  // ---------- UPDATE ASET (PERBAIKAN) ----------
+  // Terima ID dari modal supaya sinkron
+  const handleSubmitEdit = async (id, payload, photoFile, receiptFile) => {
+    try {
+      let updated = await updateAsset(id, payload);
 
-    // optional: kalau kamu mau edit juga bisa upload photo/receipt lagi
-    if (photoFile) updated = await uploadAssetPhoto(updated.id, photoFile);
-    if (receiptFile) updated = await uploadAssetReceipt(updated.id, receiptFile);
+      // optional: kalau kamu mau edit juga bisa upload photo/receipt lagi
+      if (photoFile) updated = await uploadAssetPhoto(updated.id, photoFile);
+      if (receiptFile) updated = await uploadAssetReceipt(updated.id, receiptFile);
 
-    setAssets((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+      setAssets((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
 
-    setEditModalOpen(false);
-    setEditAssetTarget(null);
-    return { success: true };
-  } catch (err) {
-    return { success: false, message: err.message };
-  }
-};
+      setEditModalOpen(false);
+      setEditAssetTarget(null);
+      return { success: true };
+    } catch (err) {
+      return { success: false, message: err.message };
+    }
+  };
 
-const handleDeleteAsset = async (asset) => {
-  try {
-    await softDeleteAsset(asset.id);
-    // remove dari list (karena backend GET sudah filter deleted_at)
-    setAssets((prev) => prev.filter((a) => a.id !== asset.id));
-  } catch (err) {
-    alert(err.message);
-  }
-};
+  const handleDeleteAsset = async (asset) => {
+    try {
+      await softDeleteAsset(asset.id);
+      // remove dari list (karena backend GET sudah filter deleted_at)
+      setAssets((prev) => prev.filter((a) => a.id !== asset.id));
+    } catch (err) {
+      alert(err.message);
+    }
+  };
 
 
   // ---------- RENDER ----------
@@ -1064,7 +1069,7 @@ const handleDeleteAsset = async (asset) => {
         onClose={() => setSelectedAsset(null)}
       />
 
-      {/* MODAL TAMBAH ASET */}
+      {/* MODAL TAMBAH ASET (Create) */}
       <AddAssetModal
         open={addModalOpen}
         onClose={() => setAddModalOpen(false)}
@@ -1099,18 +1104,19 @@ const handleDeleteAsset = async (asset) => {
         onSubmit={handleSubmitReturn}
       />
 
+      {/* MODAL EDIT ASET (SUDAH DIPERBAIKI) */}
       <AddAssetModal
         open={editModalOpen}
         onClose={() => {
           setEditModalOpen(false);
           setEditAssetTarget(null);
         }}
-        onCreateAsset={handleSubmitEdit} 
+        onSaveAsset={handleSubmitEdit} // <-- Pakai onSaveAsset untuk edit
         fundingSources={fundingSources}
         locations={locations}
         categories={categories}
         mode="edit"
-        initialData={editAssetTarget}
+        asset={editAssetTarget} // <-- Ganti initialData jadi asset agar terbaca
       />
 
 
