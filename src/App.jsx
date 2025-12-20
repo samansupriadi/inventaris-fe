@@ -451,39 +451,38 @@ function App() {
     try {
       setBorrowLoading(true);
 
-      // payload dari modal:
-      // { borrower_user_id, usage_location_id, detail_location, notes, due_date, photo }
-
-      // 1. KIRIM DATA KE BACKEND
+      // payload = data yang dikirim dari BorrowAssetModal
+      // Pastikan kita mengambil 'detail_location' dan 'notes' dari payload
+      
       const res = await borrowAsset(borrowAssetTarget.id, {
         borrower_user_id: payload.borrower_user_id,
         usage_location_id: payload.usage_location_id,
         due_date: payload.due_date || null,
         
-        // Pastikan Backend Anda menerima field ini untuk mengupdate tabel aset
-        detail_location: payload.detail_location, 
-        notes: payload.notes 
+        // --- BAGIAN INI WAJIB ADA AGAR DATA TIDAK KOSONG ---
+        detail_location: payload.detail_location, // Mengirim Detail Lokasi
+        notes: payload.notes,                     // Mengirim Catatan
+        condition_now: payload.condition_now      // Mengirim Kondisi
+        // ----------------------------------------------------
       });
 
-      // 2. UPLOAD FOTO (jika ada)
+      // Upload foto jika ada
       if (payload.photo && res?.loan?.id) {
         await uploadLoanBeforePhoto(res.loan.id, payload.photo);
       }
 
-      // 3. UPDATE STATE FRONTEND (Supaya tabel langsung berubah)
-      // Logikanya: Backend harus mengembalikan objek 'asset' yang sudah terupdate lokasi & detailnya
+      // Update state aset di tabel utama secara langsung
       if (res?.asset?.id) {
         setAssets((prev) => 
           prev.map((a) => (a.id === res.asset.id ? res.asset : a))
         );
       } else {
-        // Fallback: Kalau backend tidak mengembalikan objek aset, reload manual
-        await loadAssets();
+        await loadAssets(); // Fallback reload jika response backend beda
       }
 
-      await loadLoans(); // Reload history peminjaman
+      await loadLoans(); // Refresh history
 
-      // Close modal
+      // Tutup modal
       setBorrowModalOpen(false);
       setBorrowAssetTarget(null);
     } catch (err) {
@@ -492,7 +491,7 @@ function App() {
     } finally {
       setBorrowLoading(false);
     }
-  };
+  };;
 
   // ---------- FOTO ----------
   const handleUploadPhoto = async (assetId, event) => {

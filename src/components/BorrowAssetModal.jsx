@@ -230,9 +230,12 @@ function BorrowAssetModal({
                 value={conditionNow}
                 onChange={(e) => setConditionNow(e.target.value)}
               >
+                <option value="">Semua kondisi</option>
                 <option value="baik">Baik</option>
                 <option value="cukup">Cukup</option>
                 <option value="rusak">Rusak</option>
+                <option value="maintenance">Maintenance</option>
+                <option value="hilang">Hilang</option>
               </select>
             </div>
           </div>

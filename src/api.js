@@ -1,6 +1,18 @@
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
+
+const getAuthHeader = () => {
+  const saved = localStorage.getItem("auth");
+  if (!saved) return "";
+  try {
+    const parsed = JSON.parse(saved);
+    return parsed.token ? `Bearer ${parsed.token}` : "";
+  } catch {
+    return "";
+  }
+};
+
 // ==== AUTH / LOGIN ======================================
 export async function login(email, password) {
   const res = await fetch(`${API_BASE_URL}/api/login`, {
@@ -68,29 +80,44 @@ export async function uploadAssetPhoto(assetId, file) {
 }
 
 // === PINJAM / KEMBALIKAN ASET ===
-// payload: { borrower_user_id, usage_location_id, due_date, notes }
 export async function borrowAsset(assetId, payload) {
-  const res = await fetch(`${API_BASE_URL}/api/assets/${assetId}/borrow`, {
+  // FIX: Ensure the URL points to the correct endpoint path
+  // If API_BASE_URL is "http://localhost:4000", this becomes "http://localhost:4000/api/assets/..."
+  const url = `${API_BASE_URL}/api/assets/${assetId}/borrow`; 
+
+  const res = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "Authorization": getAuthHeader(), // Ensure this helper function exists at the top of api.js
     },
     body: JSON.stringify({
       borrower_user_id: payload.borrower_user_id,
       usage_location_id: payload.usage_location_id || null,
       due_date: payload.due_date || null,
-      notes: payload.notes || null,
+      notes: payload.notes || "",
+      detail_location: payload.detail_location || "", 
+      condition_now: payload.condition_now || "baik",
     }),
   });
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal meminjam aset");
+    let errorMessage = "Gagal meminjam aset";
+    try {
+      // Try to parse error message from JSON response
+      const errorData = await res.json();
+      errorMessage = errorData.message || errorMessage;
+    } catch (e) {
+      // Fallback for non-JSON errors (like 404 HTML pages)
+      const text = await res.text();
+      console.error("Non-JSON Error Response:", text);
+      errorMessage = `Server Error (${res.status}): Terjadi masalah di sisi server.`;
+    }
+    throw new Error(errorMessage);
   }
 
   return res.json();
 }
-
 
 export async function returnAsset(assetId, payload = null) {
   const res = await fetch(`${API_BASE_URL}/api/assets/${assetId}/return`, {
