@@ -1,3 +1,4 @@
+// src/App.jsx
 import { useEffect, useState } from "react";
 import {
   login,
@@ -36,12 +37,14 @@ import {
   createPermission,
   updatePermission,
   deletePermission,
+  uploadLoanBeforePhoto,
+  uploadLoanAfterPhoto,
+  updateAsset,
+  softDeleteAsset,
 } from "./api";
 
-import LoginPage from "./components/LoginPage";   
+import LoginPage from "./components/LoginPage";
 import Sidebar from "./components/Sidebar";
-import AssetTable from "./components/AssetTable";
-import LoanHistory from "./components/LoanHistory";
 import AssetDetailModal from "./components/AssetDetailModal";
 import AddAssetModal from "./components/AddAssetModal";
 import FundingSourcePage from "./components/FundingSourcePage";
@@ -52,36 +55,56 @@ import EntityPage from "./components/EntityPage";
 import PermissionPage from "./components/PermissionPage";
 import RolePage from "./components/RolePage";
 import QrPrintSheet from "./components/QrPrintSheet.jsx";
-
+import DashboardPage from "./components/DashboardPage.jsx";
+import AssetsPage from "./components/AssetsPage.jsx";
+import BorrowAssetModal from "./components/BorrowAssetModal";
+import ReturnAssetModal from "./components/ReturnAssetModal";
 
 function App() {
   const [assets, setAssets] = useState([]);
   const [loans, setLoans] = useState([]);
   const [fundingSources, setFundingSources] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeMenu, setActiveMenu] = useState("assets"); // 'dashboard' | 'assets' | 'funding'
+  const [activeMenu, setActiveMenu] = useState("assets");
   const [previewUrl, setPreviewUrl] = useState(null);
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarSlideIn, setSidebarSlideIn] = useState(false);
-  const [selectedFundingFilter, setSelectedFundingFilter] = useState("all");
+
   const [locations, setLocations] = useState([]);
-  const [search, setSearch] = useState("");
-  const [filterCondition, setFilterCondition] = useState("");
-  const [filterLocation, setFilterLocation] = useState("");
   const [categories, setCategories] = useState([]);
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [permissions, setPermissions] = useState([]);
   const [entities, setEntities] = useState([]);
   const [qrPrintAssets, setQrPrintAssets] = useState(null);
-  // --- STATE PAGINATION ASET ---
+
+  // FILTER aset
+  const [selectedFundingFilter, setSelectedFundingFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [filterCondition, setFilterCondition] = useState("");
+  const [filterLocation, setFilterLocation] = useState("");
+  const [filterCategory, setFilterCategory] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+  const [filterYear, setFilterYear] = useState("");
+
+  const [borrowModalOpen, setBorrowModalOpen] = useState(false);
+  const [borrowAssetTarget, setBorrowAssetTarget] = useState(null);
+  const [borrowLoading, setBorrowLoading] = useState(false);
+
+  const [returnModalOpen, setReturnModalOpen] = useState(false);
+  const [returnAssetTarget, setReturnAssetTarget] = useState(null);
+  const [returnLoading, setReturnLoading] = useState(false);
+
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editAssetTarget, setEditAssetTarget] = useState(null);
+
+  // PAGINATION aset
   const [assetPage, setAssetPage] = useState(1);
-  const ASSET_PAGE_SIZE = 10; // misal 10 baris per halaman
+  const ASSET_PAGE_SIZE = 10;
 
-
- // ---------- AUTH ----------
+  // ---------- AUTH ----------
   const [auth, setAuth] = useState(() => {
     const saved = localStorage.getItem("auth");
     if (!saved) return { user: null, token: null };
@@ -94,33 +117,19 @@ function App() {
 
   const isLoggedIn = !!auth.user && !!auth.token;
 
-
   const handleLogin = async (email, password) => {
-    const data = await login(email, password);  // <== pakai login dari api.js
+    const data = await login(email, password);
     const newAuth = {
       token: data.token,
-      user: data.user,    // di sini user sudah berisi entity + roles dari backend
+      user: data.user,
     };
     setAuth(newAuth);
     localStorage.setItem("auth", JSON.stringify(newAuth));
   };
 
-  // print QR satu aset
-  const handlePrintQr = (asset /*, qrTextFromChild */) => {
-    setQrPrintAssets([asset]);
-  };
-
-  // print QR semua aset yang sedang ditampilkan
-  const handleBulkPrintQr = (assetList) => {
-    setQrPrintAssets(assetList);
-  };
-
-
   const handleLogout = () => {
     setAuth({ user: null, token: null });
     localStorage.removeItem("auth");
-
-    // optional: bersihin state lain biar fresh
     setAssets([]);
     setLoans([]);
     setFundingSources([]);
@@ -128,17 +137,34 @@ function App() {
     setCategories([]);
     setUsers([]);
     setRoles([]);
+    setPermissions([]);
+    setEntities([]);
   };
 
+  // ---------- PRINT QR ----------
+  const handlePrintQr = (asset) => {
+    setQrPrintAssets([asset]);
+  };
 
-  //--reset filter
+  const handleBulkPrintQr = () => {
+    // gunakan semua aset HASIL FILTER (bukan cuma halaman ini)
+    setQrPrintAssets(filteredAssets);
+  };
+
+  // ---------- RESET FILTER ----------
   const handleResetFilters = () => {
     setSearch("");
     setFilterCondition("");
     setFilterLocation("");
     setSelectedFundingFilter("all");
+    setFilterCategory("");
+    setFilterStatus("");
+    setFilterYear("");
+    setAssetPage(1);
   };
-    // ---------- Lokasi ----------
+
+
+  // ---------- LOADERS ----------
   const loadLocations = async () => {
     try {
       const data = await fetchLocations();
@@ -147,8 +173,6 @@ function App() {
       console.error(err);
     }
   };
-
-  // ---------- LOAD DATA ----------
 
   const loadPermissions = async () => {
     try {
@@ -159,11 +183,10 @@ function App() {
     }
   };
 
-
   const loadAssets = async () => {
     setLoading(true);
     try {
-      const entityId = auth.user?.entity?.id || null;   // <== ambil entitas dari user login
+      const entityId = auth.user?.entity?.id || null;
       const data = await fetchAssets(entityId);
       setAssets(data);
     } finally {
@@ -179,7 +202,6 @@ function App() {
       console.error(err);
     }
   };
-
 
   const loadLoans = async () => {
     const data = await fetchLoans();
@@ -223,6 +245,19 @@ function App() {
     }
   };
 
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    loadAssets();
+    loadLoans();
+    loadFundingSources();
+    loadLocations();
+    loadCategories();
+    loadUsers();
+    loadRoles();
+    loadEntities();
+    loadPermissions();
+  }, [isLoggedIn]);
+
 
   const handleCreateRole = async (payload) => {
     const created = await createRole(payload);
@@ -241,38 +276,138 @@ function App() {
     await loadRoles();
   };
 
+  // ---------- PERMISSION ----------
+
   const handleCreatePermission = async (payload) => {
     const created = await createPermission(payload);
     setPermissions((prev) => [...prev, created]);
   };
 
-const handleUpdatePermission = async (id, payload) => {
-  const updated = await updatePermission(id, payload);
-  setPermissions((prev) =>
-    prev.map((p) => (p.id === updated.id ? updated : p))
-  );
-};
+  const handleUpdatePermission = async (id, payload) => {
+    const updated = await updatePermission(id, payload);
+    setPermissions((prev) =>
+      prev.map((p) => (p.id === updated.id ? updated : p))
+    );
+  };
+  
+  const handleDeletePermission = async (id) => {
+    await deletePermission(id);
+    setPermissions((prev) => prev.filter((p) => p.id !== id));
+  };
+  
 
-const handleDeletePermission = async (id) => {
-  await deletePermission(id);
-  setPermissions((prev) => prev.filter((p) => p.id !== id));
-};
+  //----------------LOKASI ---------------------
+    const handleCreateLocation = async (payload) => {
+      const created = await createLocation(payload);
+      setLocations((prev) => [...prev, created]);
+    };
+
+    const handleUpdateLocation = async (id, payload) => {
+      const updated = await updateLocation(id, payload);
+      setLocations((prev) =>
+        prev.map((l) => (l.id === updated.id ? updated : l))
+      );
+    };
+
+    const handleDeleteLocation = async (id) => {
+      await deleteLocation(id);
+      setLocations((prev) => prev.filter((l) => l.id !== id));
+    };
 
 
-  useEffect(() => {
-    if (!isLoggedIn) return;  
 
-    loadAssets();
-    loadLoans();
-    loadFundingSources();
-    loadLocations();
-    loadCategories();
-    loadUsers();
-    loadRoles();
-    loadEntities(); 
-    loadPermissions();
-  }, [isLoggedIn]);
+    //------------------------------- Kategory ------------------------------
+    const handleCreateCategory = async (payload) => {
+      const created = await createCategory(payload);
+      setCategories((prev) => [...prev, created]);
+    };
 
+    const handleUpdateCategory = async (id, payload) => {
+      const updated = await updateCategory(id, payload);
+      setCategories((prev) =>
+        prev.map((c) => (c.id === updated.id ? updated : c))
+      );
+    };
+
+    const handleDeleteCategory = async (id) => {
+      await deleteCategory(id);
+      setCategories((prev) => prev.filter((c) => c.id !== id));
+    };
+
+    const handleCategoryChange = (value) => {
+      setFilterCategory(value);
+      setAssetPage(1);
+    };
+
+    const handleStatusChange = (value) => {
+      setFilterStatus(value);
+      setAssetPage(1);
+    };
+
+    const handleYearChange = (value) => {
+      setFilterYear(value);
+      setAssetPage(1);
+    };
+
+
+
+    //------------------------------- USER ------------------------------
+    const handleCreateUser = async (payload) => {
+      // payload: { name, email, password, role_ids: [] }
+      const created = await createUser(payload);
+      // supaya roles ikut ke-update, ambil ulang list user dari server
+      await loadUsers();
+      return created;
+    };
+
+    const handleUpdateUser = async (id, payload) => {
+      // payload: { name, email, password (opsional), role_ids: [] }
+      const updated = await updateUser(id, payload);
+      await loadUsers();
+      return updated;
+    };
+
+    const handleDeleteUser = async (id) => {
+      await deleteUser(id);   // soft delete di backend
+      await loadUsers();
+    };
+
+
+      // ---------- ENTITAS ----------
+    const handleCreateEntity = async (payload) => {
+      const created = await createEntity(payload);
+      setEntities((prev) => [...prev, created]);
+    };
+
+    const handleUpdateEntity = async (id, payload) => {
+      const updated = await updateEntity(id, payload);
+      setEntities((prev) =>
+        prev.map((e) => (e.id === updated.id ? updated : e))
+      );
+    };
+
+    const handleDeleteEntity = async (id) => {
+      await deleteEntity(id);
+      setEntities((prev) => prev.filter((e) => e.id !== id));
+    };
+
+    // ---------- SUMBER DANA HANDLERS ----------
+    const handleCreateFundingSource = async (payload) => {
+      const created = await createFundingSource(payload);
+      setFundingSources((prev) => [...prev, created]);
+    };
+
+    const handleUpdateFundingSource = async (id, payload) => {
+      const updated = await updateFundingSource(id, payload);
+      setFundingSources((prev) =>
+        prev.map((f) => (f.id === updated.id ? updated : f))
+      );
+    };
+
+    const handleDeleteFundingSource = async (id) => {
+      await deleteFundingSource(id);
+      setFundingSources((prev) => prev.filter((f) => f.id !== id));
+    };
 
 
   // ---------- CREATE ASET ----------
@@ -303,7 +438,58 @@ const handleDeletePermission = async (id) => {
       console.error(err);
       return { success: false, message: err.message };
     }
+  }
+
+
+  // ---------- PINJAM (OPEN MODAL) ----------
+  const handleBorrow = (asset) => {
+    setBorrowAssetTarget(asset);
+    setBorrowModalOpen(true);
   };
+
+
+
+  const handleSubmitBorrow = async (payload) => {
+    try {
+      setBorrowLoading(true);
+
+      // payload dari modal:
+      // { borrower_user_id, usage_location_id, due_date, photo }
+
+      const res = await borrowAsset(borrowAssetTarget.id, {
+        borrower_user_id: payload.borrower_user_id,
+        usage_location_id: payload.usage_location_id,
+        due_date: payload.due_date || null,
+      });
+
+      // upload foto kondisi saat ini (before)
+      if (payload.photo && res?.loan?.id) {
+        await uploadLoanBeforePhoto(res.loan.id, payload.photo);
+      }
+
+      // update asset di state
+      // backend kamu mengembalikan { asset, loan }
+      if (res?.asset?.id) {
+        setAssets((prev) => prev.map((a) => (a.id === res.asset.id ? res.asset : a)));
+      } else {
+        // fallback jika response backend beda
+        await loadAssets();
+      }
+
+      await loadLoans();
+
+      // close modal
+      setBorrowModalOpen(false);
+      setBorrowAssetTarget(null);
+    } catch (err) {
+      console.error(err);
+      alert(err.message);
+    } finally {
+      setBorrowLoading(false);
+    }
+  };
+
+
 
   // ---------- FOTO ----------
   const handleUploadPhoto = async (assetId, event) => {
@@ -322,90 +508,71 @@ const handleDeletePermission = async (id) => {
     }
   };
 
-  // ---------- PINJAM / KEMBALIKAN ----------
-  const handleBorrow = async (asset) => {
-    const borrower = window.prompt("Nama peminjam:", "");
-    if (!borrower) return;
-
-    const dueDate = window.prompt(
-      "Tanggal jatuh tempo (format: YYYY-MM-DD), boleh dikosongkan:",
-      ""
-    );
-
-    try {
-      const updated = await borrowAsset(asset.id, borrower, dueDate || null);
-      setAssets((prev) =>
-        prev.map((a) => (a.id === updated.id ? updated : a))
-      );
-      loadLoans();
-    } catch (err) {
-      console.error(err);
-      alert(err.message);
-    }
-  };
-
-  const handleReturn = async (asset) => {
-    if (!window.confirm("Yakin aset ini sudah dikembalikan?")) return;
-
-    try {
-      const updated = await returnAsset(asset.id);
-      setAssets((prev) =>
-        prev.map((a) => (a.id === updated.id ? updated : a))
-      );
-      loadLoans();
-    } catch (err) {
-      console.error(err);
-      alert(err.message);
-    }
-  };
-
-  // ---------- SUMBER DANA HANDLERS ----------
-  const handleCreateFundingSource = async (payload) => {
-    const created = await createFundingSource(payload);
-    setFundingSources((prev) => [...prev, created]);
-  };
-
-  const handleUpdateFundingSource = async (id, payload) => {
-    const updated = await updateFundingSource(id, payload);
-    setFundingSources((prev) =>
-      prev.map((f) => (f.id === updated.id ? updated : f))
-    );
-  };
-
-  const handleDeleteFundingSource = async (id) => {
-    await deleteFundingSource(id);
-    setFundingSources((prev) => prev.filter((f) => f.id !== id));
-  };
-
-// ---------- FILTER & REKAP ----------
+  // ---------- FILTER ASET ----------
   const filteredAssets = assets.filter((a) => {
     const searchLower = search.toLowerCase();
 
-    // 1) Filter berdasarkan sumber dana
     const matchesFunding =
       selectedFundingFilter === "all" ||
       String(a.funding_source_id) === String(selectedFundingFilter);
 
-    // 2) Pencarian nama/kode
     const matchesSearch =
       searchLower === "" ||
       (a.name || "").toLowerCase().includes(searchLower) ||
       (a.code || "").toLowerCase().includes(searchLower);
 
-    // 3) Filter kondisi
     const matchesCondition =
       filterCondition === "" ||
       (a.condition || "").toLowerCase() === filterCondition.toLowerCase();
 
-    // 4) Filter lokasi utama (location_id)
     const matchesLocation =
       filterLocation === "" ||
       String(a.location_id) === String(filterLocation);
 
-    return matchesFunding && matchesSearch && matchesCondition && matchesLocation;
+    const matchesCategory =
+      filterCategory === "" ||
+      String(a.category_id) === String(filterCategory);
+
+    const matchesStatus =
+      filterStatus === "" ||
+      (a.status || "").toLowerCase() === filterStatus.toLowerCase();
+
+    const matchesYear =
+      filterYear === "" ||
+      (a.created_at &&
+        new Date(a.created_at).getFullYear().toString() === filterYear);
+
+    return (
+      matchesFunding &&
+      matchesSearch &&
+      matchesCondition &&
+      matchesLocation &&
+      matchesCategory &&
+      matchesStatus &&
+      matchesYear
+    );
   });
 
 
+  // ---------- PAGINATION ASET ----------
+  const totalAssetPages =
+    filteredAssets.length === 0
+      ? 1
+      : Math.ceil(filteredAssets.length / ASSET_PAGE_SIZE);
+
+  // jaga-jaga kalau setelah filter halaman jadi kebanyakan
+  useEffect(() => {
+    if (assetPage > totalAssetPages) {
+      setAssetPage(totalAssetPages);
+    }
+  }, [assetPage, totalAssetPages]);
+
+  const paginatedAssets = filteredAssets.slice(
+    (assetPage - 1) * ASSET_PAGE_SIZE,
+    assetPage * ASSET_PAGE_SIZE
+  );
+
+  // ---------- REKAP SUMBER DANA ----------
   const fundingSummary = fundingSources.map((fs) => {
     const asetFs = assets.filter((a) => a.funding_source_id === fs.id);
     const totalValue = asetFs.reduce((sum, a) => {
@@ -421,6 +588,18 @@ const handleDeletePermission = async (id) => {
     };
   });
 
+  const assetYears = Array.from(
+    new Set(
+      assets
+        .map((a) =>
+          a.created_at ? new Date(a.created_at).getFullYear().toString() : null
+        )
+        .filter(Boolean)
+    )
+  ).sort((a, b) => b.localeCompare(a)); // tahun terbaru dulu
+
+
+  // ---------- EXPORT CSV ----------
   const handleExportCsv = () => {
     const rows = filteredAssets;
 
@@ -498,118 +677,144 @@ const handleDeletePermission = async (id) => {
     URL.revokeObjectURL(url);
   };
 
-    // ---------- SIDEBAR MOBILE ----------
-    const openSidebar = () => {
-      setSidebarOpen(true);
-      setTimeout(() => setSidebarSlideIn(true), 10);
-    };
+  // ---------- SIDEBAR MOBILE ----------
+  const openSidebar = () => {
+    setSidebarOpen(true);
+    setTimeout(() => setSidebarSlideIn(true), 10);
+  };
 
-    const closeSidebar = () => {
-      setSidebarSlideIn(false);
-      setTimeout(() => setSidebarOpen(false), 200);
-    };
+  const closeSidebar = () => {
+    setSidebarSlideIn(false);
+    setTimeout(() => setSidebarOpen(false), 200);
+  };
 
-    const handleChangeMenu = (id) => {
-      setActiveMenu(id);
-      if (sidebarOpen) {
-        closeSidebar();
-      }
-    };
-
-
-  //----------------LOKASI ---------------------
-    const handleCreateLocation = async (payload) => {
-      const created = await createLocation(payload);
-      setLocations((prev) => [...prev, created]);
-    };
-
-    const handleUpdateLocation = async (id, payload) => {
-      const updated = await updateLocation(id, payload);
-      setLocations((prev) =>
-        prev.map((l) => (l.id === updated.id ? updated : l))
-      );
-    };
-
-    const handleDeleteLocation = async (id) => {
-      await deleteLocation(id);
-      setLocations((prev) => prev.filter((l) => l.id !== id));
-    };
-
-
-
-    //------------------------------- Kategory ------------------------------
-    const handleCreateCategory = async (payload) => {
-      const created = await createCategory(payload);
-      setCategories((prev) => [...prev, created]);
-    };
-
-    const handleUpdateCategory = async (id, payload) => {
-      const updated = await updateCategory(id, payload);
-      setCategories((prev) =>
-        prev.map((c) => (c.id === updated.id ? updated : c))
-      );
-    };
-
-    const handleDeleteCategory = async (id) => {
-      await deleteCategory(id);
-      setCategories((prev) => prev.filter((c) => c.id !== id));
-    };
-
-
-
-    //------------------------------- USER ------------------------------
-    const handleCreateUser = async (payload) => {
-      // payload: { name, email, password, role_ids: [] }
-      const created = await createUser(payload);
-      // supaya roles ikut ke-update, ambil ulang list user dari server
-      await loadUsers();
-      return created;
-    };
-
-    const handleUpdateUser = async (id, payload) => {
-      // payload: { name, email, password (opsional), role_ids: [] }
-      const updated = await updateUser(id, payload);
-      await loadUsers();
-      return updated;
-    };
-
-    const handleDeleteUser = async (id) => {
-      await deleteUser(id);   // soft delete di backend
-      await loadUsers();
-    };
-
-
-      // ---------- ENTITAS ----------
-    const handleCreateEntity = async (payload) => {
-      const created = await createEntity(payload);
-      setEntities((prev) => [...prev, created]);
-    };
-
-    const handleUpdateEntity = async (id, payload) => {
-      const updated = await updateEntity(id, payload);
-      setEntities((prev) =>
-        prev.map((e) => (e.id === updated.id ? updated : e))
-      );
-    };
-
-    const handleDeleteEntity = async (id) => {
-      await deleteEntity(id);
-      setEntities((prev) => prev.filter((e) => e.id !== id));
-    };
-
-
-    // ---------- LOGIN GATE ----------
-    if (!isLoggedIn) {
-      return <LoginPage onLoginSuccess={handleLogin} />;
+  const handleChangeMenu = (id) => {
+    setActiveMenu(id);
+    if (sidebarOpen) {
+      closeSidebar();
     }
+  };
+
+  // ---------- HANDLER FILTER utk AssetsPage ----------
+  const handleSearchChange = (value) => {
+    setSearch(value);
+    setAssetPage(1);
+  };
+
+  const handleConditionChange = (value) => {
+    setFilterCondition(value);
+    setAssetPage(1);
+  };
+
+  const handleLocationChange = (value) => {
+    setFilterLocation(value);
+    setAssetPage(1);
+  };
+
+  const handleFundingFilterChange = (value) => {
+    setSelectedFundingFilter(value);
+    setAssetPage(1);
+  };
+
+  // ---------- LOGIN GATE ----------
+  if (!isLoggedIn) {
+    return <LoginPage onLoginSuccess={handleLogin} />;
+  }
+
+  // const handleReturn = async (asset) => {
+  // if (!window.confirm("Yakin aset ini sudah dikembalikan?")) return;
+
+  // try {
+  //   const updated = await returnAsset(asset.id);
+
+  //   setAssets((prev) =>
+  //     prev.map((a) => (a.id === updated.id ? updated : a))
+  //   );
+
+  //   await loadLoans();
+  // } catch (err) {
+  //   console.error(err);
+  //   alert(err.message);
+  // }
+  // };
+
+  const handleReturn = async (asset) => {
+    setReturnAssetTarget(asset);
+    setReturnModalOpen(true);
+  };
+
+  const handleSubmitReturn = async (payload) => {
+    try {
+      setReturnLoading(true);
+
+      const res = await returnAsset(returnAssetTarget.id, {
+        condition_after: payload.condition_after,
+        update_asset_location: payload.update_asset_location,
+      });
+
+      if (payload.photo && res.loan?.id) {
+        await uploadLoanAfterPhoto(res.loan.id, payload.photo);
+      }
+
+      setAssets((prev) =>
+        prev.map((a) => (a.id === res.asset.id ? res.asset : a))
+      );
+
+      setReturnModalOpen(false);
+      setReturnAssetTarget(null);
+      loadLoans();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setReturnLoading(false);
+    }
+  };
+
+
+  const handleOpenEdit = (asset) => {
+  setEditAssetTarget(asset);
+  setEditModalOpen(true);
+};
+
+const handleSubmitEdit = async (payload, photoFile, receiptFile) => {
+  try {
+    let updated = await updateAsset(editAssetTarget.id, payload);
+
+    // optional: kalau kamu mau edit juga bisa upload photo/receipt lagi
+    if (photoFile) updated = await uploadAssetPhoto(updated.id, photoFile);
+    if (receiptFile) updated = await uploadAssetReceipt(updated.id, receiptFile);
+
+    setAssets((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+
+    setEditModalOpen(false);
+    setEditAssetTarget(null);
+    return { success: true };
+  } catch (err) {
+    return { success: false, message: err.message };
+  }
+};
+
+const handleDeleteAsset = async (asset) => {
+  try {
+    await softDeleteAsset(asset.id);
+    // remove dari list (karena backend GET sudah filter deleted_at)
+    setAssets((prev) => prev.filter((a) => a.id !== asset.id));
+  } catch (err) {
+    alert(err.message);
+  }
+};
 
 
   // ---------- RENDER ----------
   return (
-    <div className="min-h-screen bg-slate-100 flex">
+    <div className="h-screen bg-slate-100 flex overflow-hidden">
       {/* DESKTOP SIDEBAR */}
-      <div className="hidden md:block">
-        <Sidebar activeMenu={activeMenu} onChange={handleChangeMenu} />
+      <div className="hidden md:flex md:flex-col md:h-full">
+        <Sidebar
+          activeMenu={activeMenu}
+          onChange={handleChangeMenu}
+          className="h-full"
+        />
       </div>
 
       {/* MOBILE SIDEBAR */}
@@ -628,16 +833,16 @@ const handleDeletePermission = async (id) => {
             <Sidebar
               activeMenu={activeMenu}
               onChange={handleChangeMenu}
-              className="min-h-screen"
+              className="h-full"
             />
           </div>
         </div>
       )}
 
       {/* MAIN AREA */}
-      <div className="flex-1 flex flex-col min-h-screen">
+      <div className="flex-1 flex flex-col min-h-0">
         {/* TOP BAR */}
-        <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-6">
+        <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-6 flex-shrink-0">
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -679,9 +884,8 @@ const handleDeletePermission = async (id) => {
         </header>
 
         {/* PAGE CONTENT */}
-        <main className="flex-1 p-4 md:p-6">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6">
           <div className="w-full max-w-7xl mx-auto space-y-6">
-            {/* 👇 kalau lagi mode print QR, tampilkan QrPrintSheet saja */}
             {qrPrintAssets ? (
               <QrPrintSheet
                 assets={qrPrintAssets}
@@ -691,162 +895,58 @@ const handleDeletePermission = async (id) => {
                 onBack={() => setQrPrintAssets(null)}
               />
             ) : (
-              <div className="max-w-6xl mx-auto space-y-6">
-                {/* DASHBOARD */}
+              <>
                 {activeMenu === "dashboard" && (
-                  <>
-                    <div>
-                      <h1 className="text-2xl font-semibold text-slate-800">
-                        Dashboard
-                      </h1>
-                      <p className="text-xs text-slate-500 mt-1">
-                        Ringkasan aset dan aktivitas peminjaman.
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-3 text-sm">
-                        <div className="text-xs text-slate-500">
-                          Total aset
-                        </div>
-                        <div className="text-xl font-semibold">
-                          {assets.length}
-                        </div>
-                      </div>
-                      <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-3 text-sm">
-                        <div className="text-xs text-slate-500">
-                          Sedang dipinjam
-                        </div>
-                        <div className="text-xl font-semibold">
-                          {assets.filter((a) => a.status === "borrowed").length}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Rekap per sumber dana */}
-                    <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-4">
-                      <h2 className="text-sm font-semibold mb-2">
-                        Rekap nilai aset per sumber dana
-                      </h2>
-
-                      {fundingSummary.length === 0 ? (
-                        <p className="text-xs text-slate-400">
-                          Belum ada sumber dana / aset.
-                        </p>
-                      ) : (
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-xs md:text-sm">
-                            <thead>
-                              <tr className="border-b">
-                                <th className="text-left p-2">
-                                  Sumber Dana
-                                </th>
-                                <th className="text-right p-2">
-                                  Jumlah Aset
-                                </th>
-                                <th className="text-right p-2">
-                                  Total Nilai (Rp)
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {fundingSummary.map((row) => (
-                                <tr key={row.id} className="border-b">
-                                  <td className="p-2">{row.name}</td>
-                                  <td className="p-2 text-right">
-                                    {row.count}
-                                  </td>
-                                  <td className="p-2 text-right">
-                                    {row.totalValue.toLocaleString("id-ID")}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* <LoanHistory loans={loans} /> */}
-                  </>
+                  <DashboardPage
+                    assets={assets}
+                    fundingSummary={fundingSummary}
+                  />
                 )}
 
-                {/* ASSETS */}
                 {activeMenu === "assets" && (
-                  <>
-                    {/* Header + filter sumber dana + tombol */}
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <h1 className="text-2xl font-semibold text-slate-800">
-                          Assets
-                        </h1>
-                        <p className="text-xs text-slate-500 mt-1">
-                          Kelola daftar aset, foto, dan peminjaman.
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {/* Filter sumber dana */}
-                        <select
-                          className="border rounded px-2 py-1 text-xs"
-                          value={selectedFundingFilter}
-                          onChange={(e) =>
-                            setSelectedFundingFilter(e.target.value)
-                          }
-                        >
-                          <option value="all">Semua sumber dana</option>
-                          {fundingSources.map((fs) => (
-                            <option key={fs.id} value={fs.id}>
-                              {fs.name}
-                            </option>
-                          ))}
-                        </select>
-
-                        {/* Export */}
-                        <button
-                          type="button"
-                          onClick={handleExportCsv}
-                          className="px-3 py-2 text-sm rounded-lg border text-slate-700 bg-white hover:bg-slate-50"
-                        >
-                          Export CSV
-                        </button>
-
-                        {/* Tambah aset */}
-                        <button
-                          type="button"
-                          onClick={() => setAddModalOpen(true)}
-                          className="px-3 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
-                        >
-                          + Tambah Aset
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* 🔍 Pencarian + filter kondisi + filter lokasi */}
-                    <div className="bg-white shadow rounded-xl p-4 mb-4">
-                      {/* ... filter yang tadi ... */}
-                    </div>
-
-                    {/* Tabel aset */}
-                    <AssetTable
-                      assets={filteredAssets}
-                      loading={loading}
-                      onUploadPhoto={handleUploadPhoto}
-                      onBorrow={handleBorrow}
-                      onReturn={handleReturn}
-                      onShowDetail={setSelectedAsset}
-                      onPreviewPhoto={setPreviewUrl}
-                      fundingSources={fundingSources}
-                      locations={locations}
-                      categories={categories}
-                      // 👇 tambahan ini penting
-                      onPrintQr={handlePrintQr}
-                      onBulkPrintQr={handleBulkPrintQr}
-                    />
-                  </>
+                  <AssetsPage
+                    assets={filteredAssets}
+                    loading={loading}
+                    fundingSources={fundingSources}
+                    locations={locations}
+                    categories={categories}
+                    search={search}
+                    filterCondition={filterCondition}
+                    filterLocation={filterLocation}
+                    selectedFundingFilter={selectedFundingFilter}
+                    filterCategory={filterCategory}
+                    filterStatus={filterStatus}
+                    filterYear={filterYear}
+                    years={assetYears}
+                    onSearchChange={handleSearchChange}
+                    onConditionChange={handleConditionChange}
+                    onLocationChange={handleLocationChange}
+                    onFundingFilterChange={handleFundingFilterChange}
+                    onCategoryChange={handleCategoryChange}
+                    onStatusChange={handleStatusChange}
+                    onYearChange={handleYearChange}
+                    onResetFilters={handleResetFilters}
+                    onUploadPhoto={handleUploadPhoto}
+                    onBorrow={handleBorrow}
+                    onReturn={handleReturn}
+                    onShowDetail={setSelectedAsset}
+                    onPreviewPhoto={setPreviewUrl}
+                    onExportCsv={handleExportCsv}
+                    onPrintQr={handlePrintQr}
+                    onBulkPrintQr={handleBulkPrintQr}
+                    page={assetPage}
+                    pageSize={ASSET_PAGE_SIZE}
+                    totalItems={filteredAssets.length}
+                    totalPages={totalAssetPages}
+                    onPageChange={setAssetPage}
+                    onOpenAddModal={() => setAddModalOpen(true)}
+                    onEditAsset={handleOpenEdit}
+                    onDeleteAsset={handleDeleteAsset}
+                  />
                 )}
 
-                {/* SUMBER DANA */}
+
+
                 {activeMenu === "funding" && (
                   <FundingSourcePage
                     fundingSources={fundingSources}
@@ -857,7 +957,6 @@ const handleDeletePermission = async (id) => {
                   />
                 )}
 
-                {/* LOKASI */}
                 {activeMenu === "locations" && (
                   <LocationPage
                     locations={locations}
@@ -867,7 +966,6 @@ const handleDeletePermission = async (id) => {
                   />
                 )}
 
-                {/* KATEGORI ASET */}
                 {activeMenu === "categories" && (
                   <CategoryPage
                     categories={categories}
@@ -896,7 +994,6 @@ const handleDeletePermission = async (id) => {
                   />
                 )}
 
-                {/* USERS */}
                 {activeMenu === "users" && (
                   <UserPage
                     users={users}
@@ -908,7 +1005,6 @@ const handleDeletePermission = async (id) => {
                   />
                 )}
 
-                {/* ENTITAS */}
                 {activeMenu === "entities" && (
                   <EntityPage
                     entities={entities}
@@ -917,12 +1013,11 @@ const handleDeletePermission = async (id) => {
                     onDelete={handleDeleteEntity}
                   />
                 )}
-              </div>
+              </>
             )}
           </div>
         </main>
       </div>
-
 
       {/* MODAL PREVIEW FOTO */}
       {previewUrl && (
@@ -965,7 +1060,7 @@ const handleDeletePermission = async (id) => {
         loans={loans}
         fundingSources={fundingSources}
         locations={locations}
-        categories={categories} 
+        categories={categories}
         onClose={() => setSelectedAsset(null)}
       />
 
@@ -976,10 +1071,52 @@ const handleDeletePermission = async (id) => {
         onCreateAsset={handleCreateAsset}
         fundingSources={fundingSources}
         locations={locations}
-        categories={categories} 
+        categories={categories}
       />
+
+      {/* MODAL PINJAM ASET */}
+      <BorrowAssetModal
+        open={borrowModalOpen}
+        asset={borrowAssetTarget}
+        users={users}
+        locations={locations}
+        loading={borrowLoading}
+        onClose={() => {
+          setBorrowModalOpen(false);
+          setBorrowAssetTarget(null);
+        }}
+        onSubmit={handleSubmitBorrow}
+      />
+
+      <ReturnAssetModal
+        open={returnModalOpen}
+        asset={returnAssetTarget}
+        loading={returnLoading}
+        onClose={() => {
+          setReturnModalOpen(false);
+          setReturnAssetTarget(null);
+        }}
+        onSubmit={handleSubmitReturn}
+      />
+
+      <AddAssetModal
+        open={editModalOpen}
+        onClose={() => {
+          setEditModalOpen(false);
+          setEditAssetTarget(null);
+        }}
+        onCreateAsset={handleSubmitEdit} 
+        fundingSources={fundingSources}
+        locations={locations}
+        categories={categories}
+        mode="edit"
+        initialData={editAssetTarget}
+      />
+
+
     </div>
   );
 }
+
 
 export default App;

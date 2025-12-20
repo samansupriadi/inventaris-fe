@@ -1,5 +1,7 @@
+// src/components/AssetTable.jsx
 import QRCode from "react-qr-code";
 import { API_BASE_URL } from "../api";
+import { useEffect, useState } from "react";
 
 function AssetTable({
   assets,
@@ -12,9 +14,19 @@ function AssetTable({
   fundingSources,
   locations,
   categories,
-  onPrintQr,      
-  onBulkPrintQr
+  onPrintQr,
+  onBulkPrintQr,
+  onEdit,
+  onDelete,
 }) {
+  const [openMenuId, setOpenMenuId] = useState(null);
+
+  useEffect(() => {
+    const onDocClick = () => setOpenMenuId(null);
+    document.addEventListener("click", onDocClick);
+    return () => document.removeEventListener("click", onDocClick);
+  }, []);
+
   const getFundingName = (id) => {
     if (!id) return "-";
     const f = fundingSources?.find((x) => x.id === id);
@@ -40,7 +52,6 @@ function AssetTable({
     return n.toLocaleString("id-ID");
   };
 
-  // payload teks di dalam QR
   const buildQrText = (asset) => {
     const fundingName = getFundingName(asset.funding_source_id);
     const locationName = getLocationName(asset.location_id);
@@ -63,23 +74,21 @@ function AssetTable({
     ].join("\n");
   };
 
-  const handlePrintSingle = (asset) => {
-    const qrText = buildQrText(asset);
-    if (onPrintQr) {
-      onPrintQr(asset, qrText);
-    } else {
-      window.print();
+  const handlePrintSingle = (asset) => onPrintQr?.(asset);
+  const handleBulkPrint = () => onBulkPrintQr?.();
+
+  const handleDeleteClick = async (asset) => {
+    const ok = window.confirm(
+      `Yakin hapus aset ini?\n\n${asset.name} (${asset.code})\n\n*Hapus = soft delete`
+    );
+    if (!ok) return;
+
+    try {
+      await onDelete?.(asset);
+    } catch (err) {
+      alert(err?.message || "Gagal menghapus aset");
     }
   };
-
-  const handleBulkPrint = () => {
-    if (onBulkPrintQr) {
-      onBulkPrintQr(assets);
-    } else {
-      window.print();
-    }
-  };
-
 
   return (
     <div className="bg-white shadow rounded-xl p-4">
@@ -110,18 +119,16 @@ function AssetTable({
                 <th className="text-left p-2 whitespace-nowrap">Kode</th>
                 <th className="text-left p-2 whitespace-nowrap">Kategori</th>
                 <th className="text-left p-2 whitespace-nowrap">Lokasi</th>
-                <th className="text-left p-2 whitespace-nowrap">
-                  Detail Lokasi
-                </th>
+                <th className="text-left p-2 whitespace-nowrap">Detail Lokasi</th>
                 <th className="text-left p-2 whitespace-nowrap">Kondisi</th>
                 <th className="text-left p-2 whitespace-nowrap">Status</th>
-                <th className="text-left p-2 whitespace-nowrap">
-                  Sumber Dana
-                </th>
+                <th className="text-left p-2 whitespace-nowrap">Sumber Dana</th>
                 <th className="text-left p-2 whitespace-nowrap">Nilai (Rp)</th>
                 <th className="text-left p-2 whitespace-nowrap w-28">Foto</th>
                 <th className="text-left p-2 whitespace-nowrap w-24">QR</th>
-                <th className="text-left p-2 whitespace-nowrap w-28">Aksi</th>
+                <th className="text-left p-2 whitespace-nowrap w-32 text-right">
+                  Aksi
+                </th>
               </tr>
             </thead>
 
@@ -130,10 +137,7 @@ function AssetTable({
                 const qrText = buildQrText(a);
 
                 return (
-                  <tr
-                    key={a.id}
-                    className="border-b align-top hover:bg-slate-50"
-                  >
+                  <tr key={a.id} className="border-b align-top hover:bg-slate-50">
                     <td className="p-2">{a.name}</td>
                     <td className="p-2 font-mono">{a.code}</td>
                     <td className="p-2">{getCategoryName(a.category_id)}</td>
@@ -141,12 +145,8 @@ function AssetTable({
                     <td className="p-2">{a.location || "-"}</td>
                     <td className="p-2">{a.condition || "-"}</td>
                     <td className="p-2">{a.status || "available"}</td>
-                    <td className="p-2">
-                      {getFundingName(a.funding_source_id)}
-                    </td>
-                    <td className="p-2">
-                      Rp {formatCurrency(a.value)}
-                    </td>
+                    <td className="p-2">{getFundingName(a.funding_source_id)}</td>
+                    <td className="p-2">Rp {formatCurrency(a.value)}</td>
 
                     {/* FOTO */}
                     <td className="p-2">
@@ -155,7 +155,7 @@ function AssetTable({
                           <button
                             type="button"
                             onClick={() =>
-                              onPreviewPhoto(`${API_BASE_URL}${a.photo_url}`)
+                              onPreviewPhoto?.(`${API_BASE_URL}${a.photo_url}`)
                             }
                             className="w-20 h-20 border rounded overflow-hidden focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
@@ -176,7 +176,7 @@ function AssetTable({
                           <input
                             type="file"
                             accept="image/*"
-                            onChange={(e) => onUploadPhoto(a.id, e)}
+                            onChange={(e) => onUploadPhoto?.(a.id, e)}
                             className="hidden"
                           />
                         </label>
@@ -187,11 +187,7 @@ function AssetTable({
                     <td className="p-2">
                       <div className="flex flex-col items-center gap-1">
                         <div className="inline-block bg-white p-1 rounded shadow-sm">
-                          <QRCode
-                            value={qrText}
-                            size={56} // agak kecil biar muat di barang
-                            style={{ height: "56px", width: "56px" }}
-                          />
+                          <QRCode value={qrText} size={56} />
                         </div>
                         <span className="text-[9px] text-slate-400 text-center leading-tight">
                           Scan info aset, lokasi &amp; PIC
@@ -199,43 +195,90 @@ function AssetTable({
                       </div>
                     </td>
 
-                    {/* AKSI */}
-                    <td className="p-2 space-y-1">
-                      <button
-                        type="button"
-                        onClick={() => onShowDetail(a)}
-                        className="block w-full px-3 py-1 text-[11px] rounded border border-slate-300 text-slate-700 hover:bg-slate-100"
-                      >
-                        Detail
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handlePrintSingle(a)}
-                        className="block w-full px-3 py-1 text-[11px] rounded border border-slate-300 text-slate-700 hover:bg-slate-100"
-                      >
-                        Print QR
-                      </button>
-
-                      {a.status === "available" && (
+                    {/* AKSI (rapih) */}
+                    <td className="p-2">
+                      <div className="flex items-center justify-end gap-2">
+                        {/* Detail */}
                         <button
                           type="button"
-                          onClick={() => onBorrow(a)}
-                          className="block w-full px-3 py-1 text-[11px] rounded bg-emerald-600 text-white hover:bg-emerald-700"
+                          onClick={() => onShowDetail?.(a)}
+                          className="px-3 py-1 text-[11px] rounded border border-slate-300 text-slate-700 bg-white hover:bg-slate-50"
                         >
-                          Pinjam
+                          Detail
                         </button>
-                      )}
 
-                      {a.status === "borrowed" && (
-                        <button
-                          type="button"
-                          onClick={() => onReturn(a)}
-                          className="block w-full px-3 py-1 text-[11px] rounded bg-orange-600 text-white hover:bg-orange-700"
-                        >
-                          Kembalikan
-                        </button>
-                      )}
+                        {/* Primary: Pinjam / Kembalikan */}
+                        {a.status === "available" ? (
+                          <button
+                            type="button"
+                            onClick={() => onBorrow?.(a)}
+                            className="px-3 py-1 text-[11px] rounded bg-emerald-600 text-white hover:bg-emerald-700"
+                          >
+                            Pinjam
+                          </button>
+                        ) : a.status === "borrowed" ? (
+                          <button
+                            type="button"
+                            onClick={() => onReturn?.(a)}
+                            className="px-3 py-1 text-[11px] rounded bg-orange-600 text-white hover:bg-orange-700"
+                          >
+                            Kembalikan
+                          </button>
+                        ) : (
+                          <span className="text-[11px] text-slate-400">—</span>
+                        )}
+
+                        {/* More menu */}
+                        <div className="relative" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOpenMenuId(openMenuId === a.id ? null : a.id)
+                            }
+                            className="px-2.5 py-1 text-[11px] rounded border border-slate-300 bg-white hover:bg-slate-50"
+                            title="Aksi lainnya"
+                          >
+                            ⋯
+                          </button>
+
+                          {openMenuId === a.id && (
+                            <div className="absolute right-0 mt-1 w-40 rounded-lg border bg-white shadow-lg overflow-hidden z-20">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenMenuId(null);
+                                  handlePrintSingle(a);
+                                }}
+                                className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50"
+                              >
+                                Print QR
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenMenuId(null);
+                                  onEdit?.(a);
+                                }}
+                                className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50"
+                              >
+                                Edit
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenMenuId(null);
+                                  handleDeleteClick(a);
+                                }}
+                                className="w-full text-left px-3 py-2 text-xs hover:bg-red-50 text-red-600"
+                              >
+                                Hapus
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 );

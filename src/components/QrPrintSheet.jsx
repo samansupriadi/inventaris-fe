@@ -4,8 +4,8 @@ import QRCode from "react-qr-code";
 function QrPrintSheet({
   assets,
   fundingSources,
-  locations,   // masih dipakai untuk payload QR
-  categories,  // masih dipakai untuk payload QR
+  locations, // dipakai untuk payload QR
+  categories, // dipakai untuk payload QR
   onBack,
 }) {
   if (!assets || assets.length === 0) return null;
@@ -19,7 +19,7 @@ function QrPrintSheet({
   const findCategory = (id) =>
     id ? categories.find((c) => c.id === id) || null : null;
 
-  // Payload yang disimpan di QR (tetap lengkap)
+  // Payload QR (tetap lengkap)
   const buildQrPayload = (asset) => {
     const funding = findFunding(asset.funding_source_id);
     const location = findLocation(asset.location_id);
@@ -37,20 +37,43 @@ function QrPrintSheet({
       funding_source: funding ? funding.name : null,
     };
 
-    // simpan sebagai JSON string
     return JSON.stringify(payload);
   };
 
   return (
-    <div className="max-w-5xl mx-auto">
-      {/* Toolbar non-print */}
-      <div className="flex items-center justify-between mb-4 print:hidden">
+    <div className="qr-print-root max-w-5xl mx-auto">
+      {/* PRINT CSS (isolasi: hanya QrPrintSheet yang ke-print) */}
+      <style>{`
+        @page { size: A4; margin: 10mm; }
+
+        @media print {
+          html, body { height: auto !important; }
+          body { background: #fff !important; }
+
+          /* Hide ALL by default */
+          body * { visibility: hidden !important; }
+
+          /* Show ONLY this component */
+          .qr-print-root,
+          .qr-print-root * { visibility: visible !important; }
+
+          /* Place printable area at top-left */
+          .qr-print-root { position: absolute; left: 0; top: 0; width: 100%; }
+
+          /* No toolbar on print */
+          .qr-no-print { display: none !important; }
+
+          /* Remove borders/shadows that look ugly on paper (optional) */
+          .qr-label { box-shadow: none !important; }
+        }
+      `}</style>
+
+      {/* Toolbar (non-print) */}
+      <div className="qr-no-print flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-xl font-semibold text-slate-800">
-            Print QR Aset
-          </h1>
+          <h1 className="text-xl font-semibold text-slate-800">Print QR Aset</h1>
           <p className="text-xs text-slate-500 mt-1">
-            QR menyimpan info lengkap aset, tetapi teks yang tercetak hanya nama, kode, dan sumber.
+            QR menyimpan info lengkap aset, teks label: nama, kode, sumber.
           </p>
         </div>
         <div className="flex gap-2">
@@ -71,34 +94,79 @@ function QrPrintSheet({
         </div>
       </div>
 
-      {/* Grid label QR – ini yang akan di-print */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:grid-cols-4">
+      {/* Grid label */}
+      {/* Ukuran label fixed biar rapi saat print */}
+      <div
+        className="
+          grid gap-3
+          grid-cols-2
+          sm:grid-cols-3
+          md:grid-cols-4
+        "
+      >
         {assets.map((asset) => {
           const funding = findFunding(asset.funding_source_id);
-          const sourceLabel = funding
-            ? funding.name.toUpperCase()
-            : "________";
+          const sourceLabel = funding ? funding.name.toUpperCase() : "________";
 
           return (
             <div
               key={asset.id}
-              className="border rounded-lg p-2 flex flex-col items-center text-center"
+              className="
+                qr-label
+                border rounded-lg
+                flex flex-col items-center text-center
+                bg-white
+              "
+              style={{
+                // ukuran label (silakan ubah kalau mau lebih besar/kecil)
+                width: "48mm",
+                height: "48mm",
+                padding: "6mm",
+                pageBreakInside: "avoid",
+                breakInside: "avoid",
+              }}
             >
-              <QRCode value={buildQrPayload(asset)} size={96} />
+              <div style={{ width: "26mm", height: "26mm" }}>
+                <QRCode
+                  value={buildQrPayload(asset)}
+                  size={256} // besar internal, di-scale oleh container
+                  style={{ width: "100%", height: "100%" }}
+                />
+              </div>
 
-              <div className="mt-2 leading-tight">
-                {/* Nama aset */}
-                <div className="text-[11px] font-semibold">
+              <div className="mt-2 leading-tight w-full">
+                <div
+                  className="font-semibold"
+                  style={{
+                    fontSize: "10px",
+                    lineHeight: "12px",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                  title={asset.name}
+                >
                   {asset.name}
                 </div>
 
-                {/* Kode aset */}
-                <div className="text-[10px] font-mono text-slate-700">
+                <div
+                  className="font-mono text-slate-700"
+                  style={{
+                    fontSize: "9px",
+                    lineHeight: "11px",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                  title={asset.code}
+                >
                   {asset.code}
                 </div>
 
-                {/* Hanya satu baris ini, tidak ada Lokasi/Kondisi/Status lagi */}
-                <div className="text-[9px] text-slate-500 mt-1 uppercase">
+                <div
+                  className="text-slate-500 uppercase"
+                  style={{ fontSize: "8px", marginTop: "4px" }}
+                >
                   ASSET OF {sourceLabel}
                 </div>
               </div>

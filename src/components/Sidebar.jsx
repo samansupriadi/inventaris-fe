@@ -3,18 +3,18 @@ function Sidebar({ activeMenu, onChange, className = "" }) {
     { id: "dashboard", label: "Dashboard" },
     { id: "assets", label: "Assets" },
     { id: "funding", label: "Sumber Dana" },
-    { id: "entities", label: "Entitas" },       
+    { id: "entities", label: "Entitas" },
     { id: "locations", label: "Lokasi" },
     { id: "categories", label: "Kategori Aset" },
     { id: "roles", label: "Roles & Hak Akses" },
     { id: "users", label: "Users" },
-    { id: "permissions", label: "Permissions" }, 
+    { id: "permissions", label: "Permissions" },
   ];
 
   return (
     <aside
       className={
-        "w-64 bg-slate-900 text-slate-100 min-h-screen flex flex-col " +
+        "w-64 bg-slate-900 text-slate-100 h-full flex flex-col " + // h-full, bukan min-h-screen
         className
       }
     >
@@ -38,7 +38,7 @@ function Sidebar({ activeMenu, onChange, className = "" }) {
       </button>
 
       {/* Menu */}
-      <nav className="flex-1 mt-3 px-3 space-y-1 text-sm">
+      <nav className="flex-1 mt-3 px-3 space-y-1 text-sm overflow-y-auto">
         {items.map((item) => {
           const active = activeMenu === item.id;
           return (
@@ -61,7 +61,7 @@ function Sidebar({ activeMenu, onChange, className = "" }) {
                   : item.id === "funding"
                   ? "💰"
                   : item.id === "entities"
-                  ? "🏛️"        
+                  ? "🏛️"
                   : item.id === "locations"
                   ? "🏢"
                   : item.id === "categories"
@@ -70,8 +70,6 @@ function Sidebar({ activeMenu, onChange, className = "" }) {
                   ? "🛡️"
                   : item.id === "users"
                   ? "👤"
-                  : item.id === "roles"
-                  ? "🛡️"
                   : "✅"}
               </span>
               <span>{item.label}</span>
@@ -80,7 +78,7 @@ function Sidebar({ activeMenu, onChange, className = "" }) {
         })}
       </nav>
 
-      <div className="px-4 py-3 border-t border-slate-800 text-[11px] text-slate-500">
+      <div className="px-4 py-3 border-t border-slate-800 text-[11px] text-slate-500 flex-shrink-0">
         © {new Date().getFullYear()} Inventaris NGO
       </div>
     </aside>

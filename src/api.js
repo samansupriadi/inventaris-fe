@@ -68,15 +68,18 @@ export async function uploadAssetPhoto(assetId, file) {
 }
 
 // === PINJAM / KEMBALIKAN ASET ===
-export async function borrowAsset(assetId, borrower, dueDate) {
+// payload: { borrower_user_id, usage_location_id, due_date, notes }
+export async function borrowAsset(assetId, payload) {
   const res = await fetch(`${API_BASE_URL}/api/assets/${assetId}/borrow`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      borrower,
-      due_date: dueDate || null,
+      borrower_user_id: payload.borrower_user_id,
+      usage_location_id: payload.usage_location_id || null,
+      due_date: payload.due_date || null,
+      notes: payload.notes || null,
     }),
   });
 
@@ -88,9 +91,12 @@ export async function borrowAsset(assetId, borrower, dueDate) {
   return res.json();
 }
 
-export async function returnAsset(assetId) {
+
+export async function returnAsset(assetId, payload = null) {
   const res = await fetch(`${API_BASE_URL}/api/assets/${assetId}/return`, {
     method: "POST",
+    headers: payload ? { "Content-Type": "application/json" } : undefined,
+    body: payload ? JSON.stringify(payload) : undefined,
   });
 
   if (!res.ok) {
@@ -101,6 +107,7 @@ export async function returnAsset(assetId) {
   return res.json();
 }
 
+
 // === RIWAYAT PEMINJAMAN ===
 export async function fetchLoans() {
   const res = await fetch(`${API_BASE_URL}/api/loans`);
@@ -109,6 +116,26 @@ export async function fetchLoans() {
   }
   return res.json();
 }
+
+
+// === UPLOAD FOTO KONDISI SAAT PINJAM (BEFORE PHOTO) ===
+export async function uploadLoanBeforePhoto(loanId, file) {
+  const formData = new FormData();
+  formData.append("before_photo", file);
+
+  const res = await fetch(`${API_BASE_URL}/api/loans/${loanId}/before-photo`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Gagal upload foto kondisi (before)");
+  }
+
+  return res.json();
+}
+
 
 // === SUMBER DANA ===
 export async function fetchFundingSources(entityId) {
@@ -576,6 +603,70 @@ export async function deleteEntity(id) {
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.message || "Gagal menghapus entitas");
+  }
+
+  return res.json();
+}
+
+export async function uploadLoanAfterPhoto(loanId, file) {
+  const formData = new FormData();
+  formData.append("after_photo", file);
+
+  const res = await fetch(`${API_BASE_URL}/api/loans/${loanId}/after-photo`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Gagal upload foto AFTER");
+  }
+
+  return res.json();
+}
+
+
+
+// === UPDATE ASET ===
+export async function updateAsset(assetId, payload) {
+  const res = await fetch(`${API_BASE_URL}/api/assets/${assetId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Gagal mengubah aset");
+  }
+
+  return res.json();
+}
+
+// === SOFT DELETE ASET ===
+export async function softDeleteAsset(assetId) {
+  const res = await fetch(`${API_BASE_URL}/api/assets/${assetId}`, {
+    method: "DELETE",
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Gagal menghapus aset");
+  }
+
+  return res.json();
+}
+
+
+// OPTIONAL restore
+export async function restoreAsset(assetId) {
+  const res = await fetch(`${API_BASE_URL}/api/assets/${assetId}/restore`, {
+    method: "POST",
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Gagal restore aset");
   }
 
   return res.json();
