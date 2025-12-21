@@ -42,6 +42,7 @@ import {
   updateAsset,
   softDeleteAsset,
   API_BASE_URL,
+  logoutAPI,
 } from "./api";
 
 import LoginPage from "./components/LoginPage";
@@ -108,39 +109,70 @@ function App() {
   // ---------- AUTH ----------
   const [auth, setAuth] = useState(() => {
     const saved = localStorage.getItem("auth");
-    if (!saved) return { user: null, token: null };
+    if (!saved) return { user: null, isLoggedIn: false }; // Ganti struktur state
     try {
       return JSON.parse(saved);
     } catch {
-      return { user: null, token: null };
+      return { user: null, isLoggedIn: false };
     }
   });
 
-  const isLoggedIn = !!auth.user && !!auth.token;
+  const isLoggedIn = !!auth.user && auth.isLoggedIn;
 
   const handleLogin = async (email, password) => {
-    const data = await login(email, password);
-    const newAuth = {
-      token: data.token,
-      user: data.user,
-    };
-    setAuth(newAuth);
-    localStorage.setItem("auth", JSON.stringify(newAuth));
+    try {
+      const data = await login(email, password); // API call sukses (200 OK)
+      
+      // Token sekarang ada di Cookie (HttpOnly).
+      // Frontend tidak perlu (dan tidak bisa) simpan tokennya.
+      // Kita cukup simpan data User dan status Login.
+      
+      const newAuth = {
+        user: data.user,     // Data user dari backend
+        isLoggedIn: true,    // Flag manual bahwa kita sudah login
+      };
+      
+      setAuth(newAuth);
+      localStorage.setItem("auth", JSON.stringify(newAuth));
+      
+      // Reset filter atau load data awal jika perlu
+      setAssetPage(1);
+      
+    } catch (err) {
+      console.error(err);
+      alert(err.message || "Gagal login"); // Tampilkan error jika ada
+      throw err; // Lempar error agar LoginPage tahu dan stop loading
+    }
   };
 
-  const handleLogout = () => {
-    setAuth({ user: null, token: null });
-    localStorage.removeItem("auth");
-    setAssets([]);
-    setLoans([]);
-    setFundingSources([]);
-    setLocations([]);
-    setCategories([]);
-    setUsers([]);
-    setRoles([]);
-    setPermissions([]);
-    setEntities([]);
-  };
+  const handleLogout = async () => {
+    try {
+      // 1. Request ke Backend untuk hapus Cookie
+      await logoutAPI();
+    } catch (error) {
+      console.error("Gagal logout di server, tapi tetap logout lokal.", error);
+    } finally {
+      // 2. Hapus data di Frontend (Local Storage & State)
+      // Apapun yang terjadi di server, frontend wajib bersih-bersih.
+      
+      setAuth({ user: null, isLoggedIn: false }); // Sesuaikan format state baru
+      localStorage.removeItem("auth");
+
+      // Reset semua state data
+      setAssets([]);
+      setLoans([]);
+      setFundingSources([]);
+      setLocations([]);
+      setCategories([]);
+      setUsers([]);
+      setRoles([]);
+      setPermissions([]);
+      setEntities([]);
+      
+      // Optional: Reset halaman ke 1
+      setAssetPage(1);
+    }
+  };;
 
   // ---------- PRINT QR ----------
   const handlePrintQr = (asset) => {

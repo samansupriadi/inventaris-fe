@@ -29,6 +29,24 @@ export async function login(email, password) {
   return res.json();
 }
 
+export async function logoutAPI() {
+  const url = `${API_BASE_URL}/api/logout`;
+  
+  // Penting: credentials: "include" agar cookie dikirim ke server untuk dihapus
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include", 
+  });
+
+  if (!res.ok) {
+    // Kita abaikan error logout, karena tujuannya cuma clear session
+    return {}; 
+  }
+
+  return res.json();
+}
+
 
 // === ASET ===
 export async function fetchAssets(entityId) {
