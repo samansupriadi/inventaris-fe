@@ -119,16 +119,37 @@ export async function borrowAsset(assetId, payload) {
   return res.json();
 }
 
-export async function returnAsset(assetId, payload = null) {
-  const res = await fetch(`${API_BASE_URL}/api/assets/${assetId}/return`, {
+export async function returnAsset(assetId, payload) {
+  // Pastikan URL ada /api nya
+  const url = `${API_BASE_URL}/api/assets/${assetId}/return`; 
+
+  const res = await fetch(url, {
     method: "POST",
-    headers: payload ? { "Content-Type": "application/json" } : undefined,
-    body: payload ? JSON.stringify(payload) : undefined,
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": getAuthHeader(),
+    },
+    // Pastikan BODY mengirim semua data
+    body: JSON.stringify({
+      condition_after: payload.condition_after,
+      update_asset_location: payload.update_asset_location,
+      
+      // WAJIB ADA DI SINI JUGA:
+      return_location_id: payload.return_location_id || null,
+      return_detail_location: payload.return_detail_location || "",
+      notes_return: payload.notes_return || ""
+    }),
   });
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal mengembalikan aset");
+    let errorMessage = "Gagal mengembalikan aset";
+    try {
+      const errorData = await res.json();
+      errorMessage = errorData.message || errorMessage;
+    } catch {
+      errorMessage = `Server Error (${res.status})`;
+    }
+    throw new Error(errorMessage);
   }
 
   return res.json();

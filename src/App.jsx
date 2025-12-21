@@ -744,28 +744,45 @@ function App() {
     setReturnAssetTarget(asset);
     setReturnModalOpen(true);
   };
-
+  
   const handleSubmitReturn = async (payload) => {
     try {
       setReturnLoading(true);
 
+      // --- PERBAIKAN DI SINI: KIRIM DATA LENGKAP KE API ---
       const res = await returnAsset(returnAssetTarget.id, {
         condition_after: payload.condition_after,
         update_asset_location: payload.update_asset_location,
+        
+        // Data ini SEBELUMNYA HILANG, sekarang kita kirim:
+        return_location_id: payload.return_location_id,         
+        return_detail_location: payload.return_detail_location, 
+        notes_return: payload.notes_return                      
       });
+      // ----------------------------------------------------
 
-      if (payload.photo && res.loan?.id) {
+      // Upload foto kondisi setelah kembali (jika ada)
+      if (payload.photo && res?.loan?.id) {
         await uploadLoanAfterPhoto(res.loan.id, payload.photo);
       }
 
-      setAssets((prev) =>
-        prev.map((a) => (a.id === res.asset.id ? res.asset : a))
-      );
+      // Update tabel aset secara real-time (Optimistic Update)
+      if (res?.asset?.id) {
+        setAssets((prev) =>
+          prev.map((a) => (a.id === res.asset.id ? res.asset : a))
+        );
+      } else {
+        await loadAssets(); // Fallback jika response backend beda struktur
+      }
+
+      await loadLoans(); // Refresh history
 
       setReturnModalOpen(false);
       setReturnAssetTarget(null);
-      loadLoans();
+      // alert("Berhasil dikembalikan!"); // Opsional
+
     } catch (err) {
+      console.error(err);
       alert(err.message);
     } finally {
       setReturnLoading(false);
@@ -1095,6 +1112,7 @@ function App() {
       <ReturnAssetModal
         open={returnModalOpen}
         asset={returnAssetTarget}
+        locations={locations}
         loading={returnLoading}
         onClose={() => {
           setReturnModalOpen(false);
