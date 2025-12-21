@@ -1,5 +1,6 @@
 // src/components/AssetsPage.jsx
 import AssetTable from "./AssetTable";
+import { API_BASE_URL } from "../api";
 
 function AssetsPage({
   assets,
@@ -78,9 +79,20 @@ function AssetsPage({
           <button
             type="button"
             onClick={onExportCsv}
-            className="px-4 py-2 text-xs md:text-sm rounded-lg border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 transition-colors font-medium shadow-sm"
+            className="inline-flex items-center gap-2 px-4 py-2 text-xs md:text-sm font-medium rounded-lg border border-[#009846] text-[#009846] bg-green-50 hover:bg-[#009846] hover:text-white transition-all shadow-sm"
           >
-            Export CSV
+            {/* Icon Download / Document */}
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              strokeWidth={1.5} 
+              stroke="currentColor" 
+              className="w-4 h-4"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+            </svg>
+            Export Data
           </button>
 
           {/* TOMBOL TAMBAH ASET (HIJAU SF) */}

@@ -41,6 +41,7 @@ import {
   uploadLoanAfterPhoto,
   updateAsset,
   softDeleteAsset,
+  API_BASE_URL,
 } from "./api";
 
 import LoginPage from "./components/LoginPage";
@@ -603,80 +604,103 @@ function App() {
 
   // ---------- EXPORT CSV ----------
   const handleExportCsv = () => {
-    const rows = filteredAssets;
+    const rows = filteredAssets; // Mengambil data yang sedang tampil/difilter
 
     if (!rows.length) {
-      alert("Tidak ada aset untuk diexport.");
+      alert("Tidak ada data aset untuk diexport.");
       return;
     }
 
+    // Helper untuk ambil nama funding
     const getFundingName = (id) => {
-      if (!id) return "";
+      if (!id) return "-";
       const f = fundingSources.find((x) => x.id === id);
-      return f ? f.name : "";
+      return f ? f.name : "-";
     };
 
+    // Helper untuk format tanggal excel-friendly (YYYY-MM-DD) atau Indo (DD/MM/YYYY)
+    const formatDate = (dateString) => {
+      if (!dateString) return "";
+      const date = new Date(dateString);
+      return date.toLocaleDateString("id-ID"); // Output: 20/12/2025
+    };
+
+    // Helper url
+    const getFullUrl = (path) => {
+      if (!path) return "";
+      return path.startsWith("http") ? path : `${API_BASE_URL}${path}`;
+    };
+
+    // 1. Definisikan Header
     const header = [
-      "Nama",
-      "Kode",
+      "Nama Aset",
+      "Kode Aset",
+      "Kategori",
       "Lokasi",
+      "Detail Lokasi",
       "Kondisi",
       "Status",
       "Sumber Dana",
-      "Nilai",
-      "Tanggal Dibuat",
+      "Nilai (Rp)",
+      "Tanggal Pembelian",
+      "Link Foto Aset",     // Kolom Baru
+      "Link Kwitansi",      // Kolom Baru
     ];
 
+    // 2. Mapping Data
     const csvRows = [header];
 
     rows.forEach((a) => {
+      // Cari nama kategori & lokasi manual jika perlu, atau kirim ID jika data lengkap ada di 'a'
+      // Asumsi a.location_id adalah ID, kita cari namanya di array locations
+      const locName = locations.find(l => l.id === a.location_id)?.name || "-";
+      const catName = categories.find(c => c.id === a.category_id)?.name || "-";
+
       csvRows.push([
         a.name || "",
         a.code || "",
-        a.location || "",
+        catName,
+        locName,
+        a.location || "", // Detail lokasi
         a.condition || "",
         a.status || "",
         getFundingName(a.funding_source_id),
-        a.value != null ? String(a.value) : "",
-        a.created_at || "",
+        a.value ? String(a.value) : "0", // Biarkan angka agar bisa di-sum di Excel
+        formatDate(a.purchase_date || a.created_at),
+        getFullUrl(a.photo_url),   // URL Foto
+        getFullUrl(a.receipt_url), // URL Kwitansi
       ]);
     });
 
-    const csvContent = csvRows
-      .map((r) =>
-        r
+    // 3. Convert ke CSV String
+    const csvString = csvRows
+      .map((row) =>
+        row
           .map((cell) => {
-            const v = String(cell ?? "");
-            if (v.includes(",") || v.includes('"') || v.includes("\n")) {
-              return `"${v.replace(/"/g, '""')}"`;
-            }
-            return v;
+            // Escape tanda kutip (") agar format CSV tidak rusak
+            const stringCell = String(cell ?? "");
+            return `"${stringCell.replace(/"/g, '""')}"`;
           })
-          .join(",")
+          .join(",") // Pemisah kolom koma
       )
-      .join("\n");
+      .join("\n"); // Pemisah baris
 
-    const blob = new Blob([csvContent], {
+    // 4. Download File dengan BOM (Byte Order Mark) agar Excel baca UTF-8
+    const blob = new Blob(["\uFEFF" + csvString], {
       type: "text/csv;charset=utf-8;",
     });
 
-    const selectedFsName =
-      selectedFundingFilter === "all"
-        ? "semua"
-        : fundingSources.find(
-            (x) => String(x.id) === String(selectedFundingFilter)
-          )?.name || "unknown";
-
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `laporan_aset_${selectedFsName}_${new Date()
-      .toISOString()
-      .slice(0, 10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    const link = document.createElement("a");
+    link.href = url;
+    
+    // Nama file dinamis
+    const dateStr = new Date().toISOString().slice(0, 10);
+    link.download = `Data_Aset_SF_${dateStr}.csv`;
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // ---------- SIDEBAR MOBILE ----------
