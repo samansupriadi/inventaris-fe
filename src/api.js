@@ -300,3 +300,34 @@ export async function importAssetsExcel(file) {
 
   return res.json();
 }
+
+export async function fetchImportHistory() {
+  return fetchWithAuth("/api/import/history");
+}
+
+export async function rollbackImport(historyId) {
+  return fetchWithAuth(`/api/import/history/${historyId}`, {
+    method: "DELETE",
+  });
+}
+
+// === STOCK OPNAME ===
+export async function createOpnameSession(data) {
+  return fetchWithAuth("/api/opname", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function fetchOpnameSessions() {
+  return fetchWithAuth("/api/opname");
+}
+
+export async function fetchOpnameDetail(id) {
+  return fetchWithAuth(`/api/opname/${id}`);
+}
+
+export async function updateOpnameItem(itemId, data) {
+  return fetchWithAuth(`/api/opname/items/${itemId}`, { method: "PUT", body: JSON.stringify(data) });
+}
+
+export async function finalizeOpname(id) {
+  return fetchWithAuth(`/api/opname/${id}/finalize`, { method: "POST" });
+}

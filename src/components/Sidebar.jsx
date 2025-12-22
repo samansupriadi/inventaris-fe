@@ -21,6 +21,7 @@ function Sidebar({ activeMenu, onChange, className = "" }) {
         { id: "locations", label: "Lokasi", icon: "🏢", permission: "view_locations" },
         { id: "categories", label: "Kategori Aset", icon: "🏷️", permission: "view_categories" },
         { id: "funding", label: "Sumber Dana", icon: "💰", permission: "view_funding_sources" },
+        { id: "opname", label: "Stock Opname", icon: "📋", permission: "view_assets" },
       ]
     },
     {

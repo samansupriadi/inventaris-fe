@@ -64,6 +64,8 @@ import AssetsPage from "./components/AssetsPage.jsx";
 import BorrowAssetModal from "./components/BorrowAssetModal";
 import ReturnAssetModal from "./components/ReturnAssetModal";
 import ImportPage from "./components/ImportPage";
+import StockOpnamePage from "./components/StockOpnamePage"; 
+
 function App() {
   // STATE DATA UTAMA
   const [assets, setAssets] = useState([]);
@@ -236,21 +238,29 @@ function App() {
   };
 
   // Load data saat login berhasil
+
+  const refreshAllData = async () => {
+    // Set loading true sebentar (opsional, biar user tau ada proses refresh)
+    // setLoading(true); 
+    
+    await Promise.all([
+      loadAssets(),
+      loadLoans(),
+      loadFundingSources(),
+      loadLocations(),
+      loadCategories(),
+      loadUsers(),
+      loadRoles(),
+      loadEntities(),
+      loadPermissions()
+    ]);
+    
+    // setLoading(false);
+  };
+
   useEffect(() => {
     if (!isLoggedIn) return;
-    
-    // Parallel fetch biar lebih cepat
-    Promise.all([
-        loadAssets(),
-        loadLoans(),
-        loadFundingSources(),
-        loadLocations(),
-        loadCategories(),
-        loadUsers(),
-        loadRoles(),
-        loadEntities(),
-        loadPermissions()
-    ]);
+    refreshAllData();
   }, [isLoggedIn]);
 
 
@@ -790,7 +800,11 @@ function App() {
                 )}
 
                 {activeMenu === "import" && (
-                  <ImportPage />
+                  <ImportPage onImportSuccess={refreshAllData} />
+                )}
+                
+                {activeMenu === "opname" && (
+                  <StockOpnamePage />
                 )}
               </>
             )}
