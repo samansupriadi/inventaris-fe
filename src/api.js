@@ -1,742 +1,302 @@
-export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
+/**
+ * HELPER: Fetch Wrapper untuk JSON Request
+ * Otomatis menangani:
+ * 1. Base URL
+ * 2. Headers (Content-Type: application/json)
+ * 3. Credentials (Cookie)
+ * 4. Error Handling
+ */
+async function fetchWithAuth(endpoint, options = {}) {
+  const defaultHeaders = {
+    "Content-Type": "application/json",
+  };
 
-const getAuthHeader = () => {
-  const saved = localStorage.getItem("auth");
-  if (!saved) return "";
+  const config = {
+    ...options,
+    headers: {
+      ...defaultHeaders,
+      ...options.headers,
+    },
+    // PENTING: Ini kunci agar Cookie dikirim ke backend
+    credentials: "include", 
+  };
+
   try {
-    const parsed = JSON.parse(saved);
-    return parsed.token ? `Bearer ${parsed.token}` : "";
-  } catch {
-    return "";
-  }
-};
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
 
-// ==== AUTH / LOGIN ======================================
-export async function login(email, password) {
-  const res = await fetch(`${API_BASE_URL}/api/login`, {
+    // Handle Error HTTP (4xx, 5xx)
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Request failed with status ${response.status}`);
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error(`API Error (${endpoint}):`, error);
+    throw error;
+  }
+}
+
+/**
+ * HELPER: Fetch Wrapper khusus Upload File (FormData)
+ * Bedanya: Tidak boleh set Content-Type secara manual (biar browser yang atur boundary)
+ */
+async function fetchUpload(endpoint, fileKey, file) {
+  const formData = new FormData();
+  formData.append(fileKey, file);
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: formData,
+    credentials: "include", // Tetap butuh cookie
   });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal login");
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || "Gagal upload file");
   }
 
-  return res.json();
+  return response.json();
+}
+
+
+// ==================================================================
+//  AUTHENTICATION
+// ==================================================================
+
+export async function login(email, password) {
+  return fetchWithAuth("/api/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
 }
 
 export async function logoutAPI() {
-  const url = `${API_BASE_URL}/api/logout`;
-  
-  // Penting: credentials: "include" agar cookie dikirim ke server untuk dihapus
-  const res = await fetch(url, {
+  return fetchWithAuth("/api/logout", { method: "POST" });
+}
+
+
+// ==================================================================
+//  ASSETS MANAGEMENT
+// ==================================================================
+
+export async function fetchAssets(entityId = null) {
+  let url = "/api/assets";
+  if (entityId) url += `?entity_id=${entityId}`;
+  return fetchWithAuth(url);
+}
+
+export async function createAsset(assetData) {
+  return fetchWithAuth("/api/assets", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include", 
+    body: JSON.stringify(assetData),
   });
-
-  if (!res.ok) {
-    // Kita abaikan error logout, karena tujuannya cuma clear session
-    return {}; 
-  }
-
-  return res.json();
 }
 
-
-// === ASET ===
-export async function fetchAssets(entityId) {
-  const url = entityId
-    ? `${API_BASE_URL}/api/assets?entity_id=${entityId}`
-    : `${API_BASE_URL}/api/assets`;
-
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error("Gagal mengambil data aset");
-  }
-  return res.json();
-}
-
-
-export async function createAsset(asset) {
-  const res = await fetch(`${API_BASE_URL}/api/assets`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(asset),
+export async function updateAsset(id, assetData) {
+  return fetchWithAuth(`/api/assets/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(assetData),
   });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal membuat aset");
-  }
-
-  return res.json();
 }
 
-// === FOTO ASET ===
-export async function uploadAssetPhoto(assetId, file) {
-  const formData = new FormData();
-  formData.append("photo", file);
-
-  const res = await fetch(`${API_BASE_URL}/api/assets/${assetId}/photo`, {
-    method: "POST",
-    body: formData,
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal upload foto");
-  }
-
-  return res.json();
+export async function softDeleteAsset(id) {
+  return fetchWithAuth(`/api/assets/${id}`, { method: "DELETE" });
 }
 
-// === PINJAM / KEMBALIKAN ASET ===
+export async function restoreAsset(id) {
+  return fetchWithAuth(`/api/assets/${id}/restore`, { method: "POST" });
+}
+
+// Upload Foto Aset
+export async function uploadAssetPhoto(id, file) {
+  return fetchUpload(`/api/assets/${id}/photo`, "photo", file);
+}
+
+// Upload Kwitansi Aset
+export async function uploadAssetReceipt(id, file) {
+  return fetchUpload(`/api/assets/${id}/receipt`, "receipt", file);
+}
+
+
+// ==================================================================
+//  LOANS (PEMINJAMAN)
+// ==================================================================
+
+export async function fetchLoans() {
+  return fetchWithAuth("/api/loans");
+}
+
 export async function borrowAsset(assetId, payload) {
-  // FIX: Ensure the URL points to the correct endpoint path
-  // If API_BASE_URL is "http://localhost:4000", this becomes "http://localhost:4000/api/assets/..."
-  const url = `${API_BASE_URL}/api/assets/${assetId}/borrow`; 
-
-  const res = await fetch(url, {
+  return fetchWithAuth(`/api/assets/${assetId}/borrow`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": getAuthHeader(), // Ensure this helper function exists at the top of api.js
-    },
     body: JSON.stringify({
       borrower_user_id: payload.borrower_user_id,
       usage_location_id: payload.usage_location_id || null,
       due_date: payload.due_date || null,
       notes: payload.notes || "",
-      detail_location: payload.detail_location || "", 
+      detail_location: payload.detail_location || "",
       condition_now: payload.condition_now || "baik",
     }),
   });
-
-  if (!res.ok) {
-    let errorMessage = "Gagal meminjam aset";
-    try {
-      // Try to parse error message from JSON response
-      const errorData = await res.json();
-      errorMessage = errorData.message || errorMessage;
-    } catch (e) {
-      // Fallback for non-JSON errors (like 404 HTML pages)
-      const text = await res.text();
-      console.error("Non-JSON Error Response:", text);
-      errorMessage = `Server Error (${res.status}): Terjadi masalah di sisi server.`;
-    }
-    throw new Error(errorMessage);
-  }
-
-  return res.json();
 }
 
 export async function returnAsset(assetId, payload) {
-  // Pastikan URL ada /api nya
-  const url = `${API_BASE_URL}/api/assets/${assetId}/return`; 
-
-  const res = await fetch(url, {
+  return fetchWithAuth(`/api/assets/${assetId}/return`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": getAuthHeader(),
-    },
-    // Pastikan BODY mengirim semua data
     body: JSON.stringify({
       condition_after: payload.condition_after,
       update_asset_location: payload.update_asset_location,
-      
-      // WAJIB ADA DI SINI JUGA:
       return_location_id: payload.return_location_id || null,
       return_detail_location: payload.return_detail_location || "",
       notes_return: payload.notes_return || ""
     }),
   });
-
-  if (!res.ok) {
-    let errorMessage = "Gagal mengembalikan aset";
-    try {
-      const errorData = await res.json();
-      errorMessage = errorData.message || errorMessage;
-    } catch {
-      errorMessage = `Server Error (${res.status})`;
-    }
-    throw new Error(errorMessage);
-  }
-
-  return res.json();
 }
 
-
-// === RIWAYAT PEMINJAMAN ===
-export async function fetchLoans() {
-  const res = await fetch(`${API_BASE_URL}/api/loans`);
-  if (!res.ok) {
-    throw new Error("Gagal mengambil riwayat peminjaman");
-  }
-  return res.json();
-}
-
-
-// === UPLOAD FOTO KONDISI SAAT PINJAM (BEFORE PHOTO) ===
 export async function uploadLoanBeforePhoto(loanId, file) {
-  const formData = new FormData();
-  formData.append("before_photo", file);
-
-  const res = await fetch(`${API_BASE_URL}/api/loans/${loanId}/before-photo`, {
-    method: "POST",
-    body: formData,
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal upload foto kondisi (before)");
-  }
-
-  return res.json();
-}
-
-
-// === SUMBER DANA ===
-export async function fetchFundingSources(entityId) {
-  const url = entityId
-    ? `${API_BASE_URL}/api/funding-sources?entity_id=${entityId}`
-    : `${API_BASE_URL}/api/funding-sources`;
-
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error("Gagal mengambil sumber dana");
-  }
-  return res.json();
-}
-
-
-export async function createFundingSource(data) {
-  const res = await fetch(`${API_BASE_URL}/api/funding-sources`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal membuat sumber dana");
-  }
-
-  return res.json();
-}
-
-export async function updateFundingSource(id, data) {
-  const res = await fetch(`${API_BASE_URL}/api/funding-sources/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal mengubah sumber dana");
-  }
-
-  return res.json();
-}
-
-export async function deleteFundingSource(id) {
-  const res = await fetch(`${API_BASE_URL}/api/funding-sources/${id}`, {
-    method: "DELETE",
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal menghapus sumber dana");
-  }
-
-  return res.json();
-}
-
-
-
-// ==== LOKASI ====
-
-// ambil semua lokasi
-export async function fetchLocations() {
-  const res = await fetch(`${API_BASE_URL}/api/locations`);
-  if (!res.ok) {
-    throw new Error("Gagal mengambil lokasi");
-  }
-  return res.json();
-}
-
-export async function createLocation(data) {
-  const res = await fetch(`${API_BASE_URL}/api/locations`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal membuat lokasi");
-  }
-
-  return res.json();
-}
-
-export async function updateLocation(id, data) {
-  const res = await fetch(`${API_BASE_URL}/api/locations/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal mengubah lokasi");
-  }
-
-  return res.json();
-}
-
-export async function deleteLocation(id) {
-  const res = await fetch(`${API_BASE_URL}/api/locations/${id}`, {
-    method: "DELETE",
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal menghapus lokasi");
-  }
-
-  return res.json();
-}
-
-
-// === API UPLOAD KWITANSI ===
-export async function uploadAssetReceipt(assetId, file) {
-  const formData = new FormData();
-  formData.append("receipt", file);
-
-  const res = await fetch(`${API_BASE_URL}/api/assets/${assetId}/receipt`, {
-    method: "POST",
-    body: formData,
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal upload kwitansi");
-  }
-
-  return res.json();
-}
-
-
-// ==== KATEGORI ASET ====
-
-export async function fetchCategories() {
-  const res = await fetch(`${API_BASE_URL}/api/categories`);
-  if (!res.ok) {
-    throw new Error("Gagal mengambil kategori aset");
-  }
-  return res.json();
-}
-
-export async function createCategory(data) {
-  const res = await fetch(`${API_BASE_URL}/api/categories`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal membuat kategori");
-  }
-
-  return res.json();
-}
-
-export async function updateCategory(id, data) {
-  const res = await fetch(`${API_BASE_URL}/api/categories/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal mengubah kategori");
-  }
-
-  return res.json();
-}
-
-export async function deleteCategory(id) {
-  const res = await fetch(`${API_BASE_URL}/api/categories/${id}`, {
-    method: "DELETE",
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal menghapus kategori");
-  }
-
-  return res.json();
-}
-
-// ==== ROLES (HAK AKSES) =================================
-
-export async function fetchRoles() {
-  const res = await fetch(`${API_BASE_URL}/api/roles`);
-  if (!res.ok) {
-    throw new Error("Gagal mengambil data role");
-  }
-  return res.json();
-}
-
-export async function createRole(data) {
-  const res = await fetch(`${API_BASE_URL}/api/roles`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal membuat role");
-  }
-
-  return res.json();
-}
-
-export async function updateRole(id, data) {
-  const res = await fetch(`${API_BASE_URL}/api/roles/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal mengubah role");
-  }
-
-  return res.json();
-}
-
-export async function deleteRole(id) {
-  const res = await fetch(`${API_BASE_URL}/api/roles/${id}`, {
-    method: "DELETE",
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal menghapus role");
-  }
-
-  return res.json();
-}
-
-// ==== PERMISSIONS (HAK AKSES MENU) =========================
-export async function fetchPermissions() {
-  const res = await fetch(`${API_BASE_URL}/api/permissions`);
-  if (!res.ok) {
-    throw new Error("Gagal mengambil data permission");
-  }
-  return res.json();
-}
-
-export async function createPermission(data) {
-  const res = await fetch(`${API_BASE_URL}/api/permissions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal membuat permission");
-  }
-
-  return res.json();
-}
-
-export async function updatePermission(id, data) {
-  const res = await fetch(`${API_BASE_URL}/api/permissions/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal mengubah permission");
-  }
-
-  return res.json();
-}
-
-export async function deletePermission(id) {
-  const res = await fetch(`${API_BASE_URL}/api/permissions/${id}`, {
-    method: "DELETE",
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal menghapus permission");
-  }
-
-  return res.json();
-}
-
-
-// ==== USERS =============================================
-
-export async function fetchUsers() {
-  const res = await fetch(`${API_BASE_URL}/api/users`);
-  if (!res.ok) {
-    throw new Error("Gagal mengambil data user");
-  }
-  return res.json();
-}
-
-export async function createUser(data) {
-  const res = await fetch(`${API_BASE_URL}/api/users`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal membuat user");
-  }
-
-  return res.json();
-}
-
-export async function updateUser(id, data) {
-  const res = await fetch(`${API_BASE_URL}/api/users/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal mengubah user");
-  }
-
-  return res.json();
-}
-
-// soft delete
-export async function deleteUser(id) {
-  const res = await fetch(`${API_BASE_URL}/api/users/${id}`, {
-    method: "DELETE",
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal menghapus user");
-  }
-
-  return res.json();
-}
-
-// kalau nanti mau dipakai restore (opsional)
-export async function restoreUser(id) {
-  const res = await fetch(`${API_BASE_URL}/api/users/${id}/restore`, {
-    method: "POST",
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal me-restore user");
-  }
-
-  return res.json();
-}
-
-
-// ==== KODE MATA ANGGARAN (KMA) ======================
-export async function fetchBudgetCodes(fundingSourceId) {
-  const url = fundingSourceId
-    ? `${API_BASE_URL}/api/budget-codes?funding_source_id=${fundingSourceId}`
-    : `${API_BASE_URL}/api/budget-codes`;
-
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error("Gagal mengambil kode mata anggaran");
-  }
-  return res.json();
-}
-
-
-export async function createBudgetCode(data) {
-  const res = await fetch(`${API_BASE_URL}/api/budget-codes`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal membuat kode mata anggaran");
-  }
-
-  return res.json();
-}
-
-export async function updateBudgetCode(id, data) {
-  const res = await fetch(`${API_BASE_URL}/api/budget-codes/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal mengubah kode mata anggaran");
-  }
-
-  return res.json();
-}
-
-export async function deleteBudgetCode(id) {
-  const res = await fetch(`${API_BASE_URL}/api/budget-codes/${id}`, {
-    method: "DELETE",
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal menghapus kode mata anggaran");
-  }
-
-  return res.json();
-}
-
-// ==== ENTITIES =====================================
-
-export async function fetchEntities() {
-  const res = await fetch(`${API_BASE_URL}/api/entities`);
-  if (!res.ok) {
-    throw new Error("Gagal mengambil entitas");
-  }
-  return res.json();
-}
-
-export async function createEntity(data) {
-  const res = await fetch(`${API_BASE_URL}/api/entities`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal membuat entitas");
-  }
-
-  return res.json();
-}
-
-export async function updateEntity(id, data) {
-  const res = await fetch(`${API_BASE_URL}/api/entities/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal mengubah entitas");
-  }
-
-  return res.json();
-}
-
-export async function deleteEntity(id) {
-  const res = await fetch(`${API_BASE_URL}/api/entities/${id}`, {
-    method: "DELETE",
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal menghapus entitas");
-  }
-
-  return res.json();
+  return fetchUpload(`/api/loans/${loanId}/before-photo`, "before_photo", file);
 }
 
 export async function uploadLoanAfterPhoto(loanId, file) {
-  const formData = new FormData();
-  formData.append("after_photo", file);
+  return fetchUpload(`/api/loans/${loanId}/after-photo`, "after_photo", file);
+}
 
-  const res = await fetch(`${API_BASE_URL}/api/loans/${loanId}/after-photo`, {
+
+// ==================================================================
+//  MASTER DATA (CRUD Standard)
+// ==================================================================
+
+// --- Funding Sources ---
+export async function fetchFundingSources(entityId = null) {
+  let url = "/api/funding-sources";
+  if (entityId) url += `?entity_id=${entityId}`;
+  return fetchWithAuth(url);
+}
+export async function createFundingSource(data) {
+  return fetchWithAuth("/api/funding-sources", { method: "POST", body: JSON.stringify(data) });
+}
+export async function updateFundingSource(id, data) {
+  return fetchWithAuth(`/api/funding-sources/${id}`, { method: "PUT", body: JSON.stringify(data) });
+}
+export async function deleteFundingSource(id) {
+  return fetchWithAuth(`/api/funding-sources/${id}`, { method: "DELETE" });
+}
+
+// --- Locations ---
+export async function fetchLocations() { return fetchWithAuth("/api/locations"); }
+export async function createLocation(data) {
+  return fetchWithAuth("/api/locations", { method: "POST", body: JSON.stringify(data) });
+}
+export async function updateLocation(id, data) {
+  return fetchWithAuth(`/api/locations/${id}`, { method: "PUT", body: JSON.stringify(data) });
+}
+export async function deleteLocation(id) {
+  return fetchWithAuth(`/api/locations/${id}`, { method: "DELETE" });
+}
+
+// --- Categories ---
+export async function fetchCategories() { return fetchWithAuth("/api/categories"); }
+export async function createCategory(data) {
+  return fetchWithAuth("/api/categories", { method: "POST", body: JSON.stringify(data) });
+}
+export async function updateCategory(id, data) {
+  return fetchWithAuth(`/api/categories/${id}`, { method: "PUT", body: JSON.stringify(data) });
+}
+export async function deleteCategory(id) {
+  return fetchWithAuth(`/api/categories/${id}`, { method: "DELETE" });
+}
+
+// --- Entities ---
+export async function fetchEntities() { return fetchWithAuth("/api/entities"); }
+export async function createEntity(data) {
+  return fetchWithAuth("/api/entities", { method: "POST", body: JSON.stringify(data) });
+}
+export async function updateEntity(id, data) {
+  return fetchWithAuth(`/api/entities/${id}`, { method: "PUT", body: JSON.stringify(data) });
+}
+export async function deleteEntity(id) {
+  return fetchWithAuth(`/api/entities/${id}`, { method: "DELETE" });
+}
+
+// --- Budget Codes ---
+export async function fetchBudgetCodes(fundingSourceId = null) {
+  let url = "/api/budget-codes";
+  if (fundingSourceId) url += `?funding_source_id=${fundingSourceId}`;
+  return fetchWithAuth(url);
+}
+export async function createBudgetCode(data) {
+  return fetchWithAuth("/api/budget-codes", { method: "POST", body: JSON.stringify(data) });
+}
+export async function updateBudgetCode(id, data) {
+  return fetchWithAuth(`/api/budget-codes/${id}`, { method: "PUT", body: JSON.stringify(data) });
+}
+export async function deleteBudgetCode(id) {
+  return fetchWithAuth(`/api/budget-codes/${id}`, { method: "DELETE" });
+}
+
+
+// ==================================================================
+//  USER & ACCESS MANAGEMENT (RBAC)
+// ==================================================================
+
+// --- Users ---
+export async function fetchUsers() { return fetchWithAuth("/api/users"); }
+export async function createUser(data) {
+  return fetchWithAuth("/api/users", { method: "POST", body: JSON.stringify(data) });
+}
+export async function updateUser(id, data) {
+  return fetchWithAuth(`/api/users/${id}`, { method: "PUT", body: JSON.stringify(data) });
+}
+export async function deleteUser(id) {
+  return fetchWithAuth(`/api/users/${id}`, { method: "DELETE" });
+}
+export async function restoreUser(id) {
+  return fetchWithAuth(`/api/users/${id}/restore`, { method: "POST" });
+}
+
+// --- Roles ---
+export async function fetchRoles() { return fetchWithAuth("/api/roles"); }
+export async function createRole(data) {
+  return fetchWithAuth("/api/roles", { method: "POST", body: JSON.stringify(data) });
+}
+export async function updateRole(id, data) {
+  return fetchWithAuth(`/api/roles/${id}`, { method: "PUT", body: JSON.stringify(data) });
+}
+export async function deleteRole(id) {
+  return fetchWithAuth(`/api/roles/${id}`, { method: "DELETE" });
+}
+
+// --- Permissions ---
+export async function fetchPermissions() { return fetchWithAuth("/api/permissions"); }
+export async function createPermission(data) {
+  return fetchWithAuth("/api/permissions", { method: "POST", body: JSON.stringify(data) });
+}
+export async function updatePermission(id, data) {
+  return fetchWithAuth(`/api/permissions/${id}`, { method: "PUT", body: JSON.stringify(data) });
+}
+export async function deletePermission(id) {
+  return fetchWithAuth(`/api/permissions/${id}`, { method: "DELETE" });
+}
+
+// === IMPORT DATA ===
+export async function importAssetsExcel(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  // Endpoint yang tadi kita buat
+  const res = await fetch(`${API_BASE_URL}/api/import/assets`, {
     method: "POST",
     body: formData,
+    credentials: "include", // Supaya cookie auth terbawa
   });
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal upload foto AFTER");
+    throw new Error(err.message || "Gagal import data");
   }
 
   return res.json();
 }
-
-
-
-// === UPDATE ASET ===
-export async function updateAsset(assetId, payload) {
-  const res = await fetch(`${API_BASE_URL}/api/assets/${assetId}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal mengubah aset");
-  }
-
-  return res.json();
-}
-
-// === SOFT DELETE ASET ===
-export async function softDeleteAsset(assetId) {
-  const res = await fetch(`${API_BASE_URL}/api/assets/${assetId}`, {
-    method: "DELETE",
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal menghapus aset");
-  }
-
-  return res.json();
-}
-
-
-// OPTIONAL restore
-export async function restoreAsset(assetId) {
-  const res = await fetch(`${API_BASE_URL}/api/assets/${assetId}/restore`, {
-    method: "POST",
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Gagal restore aset");
-  }
-
-  return res.json();
-}
-
-
-

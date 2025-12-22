@@ -45,8 +45,10 @@ import {
   logoutAPI,
 } from "./api";
 
+// COMPONENTS
 import LoginPage from "./components/LoginPage";
 import Sidebar from "./components/Sidebar";
+import Header from "./components/Header"; // Pastikan sudah buat Header.jsx
 import AssetDetailModal from "./components/AssetDetailModal";
 import AddAssetModal from "./components/AddAssetModal";
 import FundingSourcePage from "./components/FundingSourcePage";
@@ -61,28 +63,41 @@ import DashboardPage from "./components/DashboardPage.jsx";
 import AssetsPage from "./components/AssetsPage.jsx";
 import BorrowAssetModal from "./components/BorrowAssetModal";
 import ReturnAssetModal from "./components/ReturnAssetModal";
-
+import ImportPage from "./components/ImportPage";
 function App() {
+  // STATE DATA UTAMA
   const [assets, setAssets] = useState([]);
   const [loans, setLoans] = useState([]);
   const [fundingSources, setFundingSources] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [activeMenu, setActiveMenu] = useState("assets");
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const [selectedAsset, setSelectedAsset] = useState(null);
-  const [addModalOpen, setAddModalOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarSlideIn, setSidebarSlideIn] = useState(false);
-
   const [locations, setLocations] = useState([]);
   const [categories, setCategories] = useState([]);
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [permissions, setPermissions] = useState([]);
   const [entities, setEntities] = useState([]);
-  const [qrPrintAssets, setQrPrintAssets] = useState(null);
 
-  // FILTER aset
+  // STATE UI
+  const [loading, setLoading] = useState(true);
+  const [activeMenu, setActiveMenu] = useState("dashboard"); // Default ke Dashboard
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [selectedAsset, setSelectedAsset] = useState(null);
+  
+  // MODAL STATES
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editAssetTarget, setEditAssetTarget] = useState(null);
+  const [borrowModalOpen, setBorrowModalOpen] = useState(false);
+  const [borrowAssetTarget, setBorrowAssetTarget] = useState(null);
+  const [borrowLoading, setBorrowLoading] = useState(false);
+  const [returnModalOpen, setReturnModalOpen] = useState(false);
+  const [returnAssetTarget, setReturnAssetTarget] = useState(null);
+  const [returnLoading, setReturnLoading] = useState(false);
+  
+  // PRINT & SIDEBAR STATES
+  const [qrPrintAssets, setQrPrintAssets] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // Untuk Mobile
+
+  // FILTER STATES
   const [selectedFundingFilter, setSelectedFundingFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [filterCondition, setFilterCondition] = useState("");
@@ -91,25 +106,14 @@ function App() {
   const [filterStatus, setFilterStatus] = useState("");
   const [filterYear, setFilterYear] = useState("");
 
-  const [borrowModalOpen, setBorrowModalOpen] = useState(false);
-  const [borrowAssetTarget, setBorrowAssetTarget] = useState(null);
-  const [borrowLoading, setBorrowLoading] = useState(false);
-
-  const [returnModalOpen, setReturnModalOpen] = useState(false);
-  const [returnAssetTarget, setReturnAssetTarget] = useState(null);
-  const [returnLoading, setReturnLoading] = useState(false);
-
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [editAssetTarget, setEditAssetTarget] = useState(null);
-
-  // PAGINATION aset
+  // PAGINATION
   const [assetPage, setAssetPage] = useState(1);
   const ASSET_PAGE_SIZE = 10;
 
-  // ---------- AUTH ----------
+  // ---------- AUTHENTICATION ----------
   const [auth, setAuth] = useState(() => {
     const saved = localStorage.getItem("auth");
-    if (!saved) return { user: null, isLoggedIn: false }; // Ganti struktur state
+    if (!saved) return { user: null, isLoggedIn: false };
     try {
       return JSON.parse(saved);
     } catch {
@@ -121,44 +125,34 @@ function App() {
 
   const handleLogin = async (email, password) => {
     try {
-      const data = await login(email, password); // API call sukses (200 OK)
-      
-      // Token sekarang ada di Cookie (HttpOnly).
-      // Frontend tidak perlu (dan tidak bisa) simpan tokennya.
-      // Kita cukup simpan data User dan status Login.
+      const data = await login(email, password);
       
       const newAuth = {
-        user: data.user,     // Data user dari backend
-        isLoggedIn: true,    // Flag manual bahwa kita sudah login
+        user: data.user,
+        isLoggedIn: true,
       };
       
       setAuth(newAuth);
       localStorage.setItem("auth", JSON.stringify(newAuth));
-      
-      // Reset filter atau load data awal jika perlu
       setAssetPage(1);
       
     } catch (err) {
       console.error(err);
-      alert(err.message || "Gagal login"); // Tampilkan error jika ada
-      throw err; // Lempar error agar LoginPage tahu dan stop loading
+      alert(err.message || "Gagal login");
+      throw err;
     }
   };
 
   const handleLogout = async () => {
     try {
-      // 1. Request ke Backend untuk hapus Cookie
       await logoutAPI();
     } catch (error) {
-      console.error("Gagal logout di server, tapi tetap logout lokal.", error);
+      console.error("Logout server error (ignored)", error);
     } finally {
-      // 2. Hapus data di Frontend (Local Storage & State)
-      // Apapun yang terjadi di server, frontend wajib bersih-bersih.
-      
-      setAuth({ user: null, isLoggedIn: false }); // Sesuaikan format state baru
+      setAuth({ user: null, isLoggedIn: false });
       localStorage.removeItem("auth");
-
-      // Reset semua state data
+      
+      // Clear all data
       setAssets([]);
       setLoans([]);
       setFundingSources([]);
@@ -168,52 +162,23 @@ function App() {
       setRoles([]);
       setPermissions([]);
       setEntities([]);
-      
-      // Optional: Reset halaman ke 1
       setAssetPage(1);
     }
-  };;
-
-  // ---------- PRINT QR ----------
-  const handlePrintQr = (asset) => {
-    setQrPrintAssets([asset]);
   };
 
-  const handleBulkPrintQr = () => {
-    // gunakan semua aset HASIL FILTER (bukan cuma halaman ini)
-    setQrPrintAssets(filteredAssets);
-  };
-
-  // ---------- RESET FILTER ----------
-  const handleResetFilters = () => {
-    setSearch("");
-    setFilterCondition("");
-    setFilterLocation("");
-    setSelectedFundingFilter("all");
-    setFilterCategory("");
-    setFilterStatus("");
-    setFilterYear("");
-    setAssetPage(1);
-  };
-
-
-  // ---------- LOADERS ----------
+  // ---------- DATA LOADERS ----------
   const loadLocations = async () => {
     try {
       const data = await fetchLocations();
       setLocations(data);
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) { console.error(err); }
   };
 
   const loadPermissions = async () => {
     try {
       const data = await fetchPermissions();
       setPermissions(data);
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) { console.error(err); }
   };
 
   const loadAssets = async () => {
@@ -231,14 +196,14 @@ function App() {
     try {
       const data = await fetchEntities();
       setEntities(data);
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) { console.error(err); }
   };
 
   const loadLoans = async () => {
-    const data = await fetchLoans();
-    setLoans(data);
+    try {
+        const data = await fetchLoans();
+        setLoans(data);
+    } catch (err) { console.error(err); }
   };
 
   const loadFundingSources = async () => {
@@ -246,623 +211,182 @@ function App() {
       const entityId = auth.user?.entity?.id || null;
       const data = await fetchFundingSources(entityId);
       setFundingSources(data);
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) { console.error(err); }
   };
 
   const loadCategories = async () => {
     try {
       const data = await fetchCategories();
       setCategories(data);
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) { console.error(err); }
   };
 
   const loadUsers = async () => {
     try {
       const data = await fetchUsers();
       setUsers(data);
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) { console.error(err); }
   };
 
   const loadRoles = async () => {
     try {
       const data = await fetchRoles();
       setRoles(data);
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) { console.error(err); }
   };
 
+  // Load data saat login berhasil
   useEffect(() => {
     if (!isLoggedIn) return;
-    loadAssets();
-    loadLoans();
-    loadFundingSources();
-    loadLocations();
-    loadCategories();
-    loadUsers();
-    loadRoles();
-    loadEntities();
-    loadPermissions();
+    
+    // Parallel fetch biar lebih cepat
+    Promise.all([
+        loadAssets(),
+        loadLoans(),
+        loadFundingSources(),
+        loadLocations(),
+        loadCategories(),
+        loadUsers(),
+        loadRoles(),
+        loadEntities(),
+        loadPermissions()
+    ]);
   }, [isLoggedIn]);
 
 
+  // ---------- CRUD HANDLERS (ROLES, PERMISSION, LOCATION, ETC) ----------
+
+  // ROLE
   const handleCreateRole = async (payload) => {
     const created = await createRole(payload);
     await loadRoles();
     return created;
   };
-
   const handleUpdateRole = async (id, payload) => {
     const updated = await updateRole(id, payload);
     await loadRoles();
     return updated;
   };
-
   const handleDeleteRole = async (id) => {
     await deleteRole(id);
     await loadRoles();
   };
 
-  // ---------- PERMISSION ----------
-
+  // PERMISSION
   const handleCreatePermission = async (payload) => {
     const created = await createPermission(payload);
     setPermissions((prev) => [...prev, created]);
   };
-
   const handleUpdatePermission = async (id, payload) => {
     const updated = await updatePermission(id, payload);
-    setPermissions((prev) =>
-      prev.map((p) => (p.id === updated.id ? updated : p))
-    );
+    setPermissions((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
   };
-  
   const handleDeletePermission = async (id) => {
     await deletePermission(id);
     setPermissions((prev) => prev.filter((p) => p.id !== id));
   };
+
+  // LOCATION
+  const handleCreateLocation = async (payload) => {
+    const created = await createLocation(payload);
+    setLocations((prev) => [...prev, created]);
+  };
+  const handleUpdateLocation = async (id, payload) => {
+    const updated = await updateLocation(id, payload);
+    setLocations((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+  };
+  const handleDeleteLocation = async (id) => {
+    await deleteLocation(id);
+    setLocations((prev) => prev.filter((l) => l.id !== id));
+  };
+
+  // CATEGORY
+  const handleCreateCategory = async (payload) => {
+    const created = await createCategory(payload);
+    setCategories((prev) => [...prev, created]);
+  };
+  const handleUpdateCategory = async (id, payload) => {
+    const updated = await updateCategory(id, payload);
+    setCategories((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+  };
+  const handleDeleteCategory = async (id) => {
+    await deleteCategory(id);
+    setCategories((prev) => prev.filter((c) => c.id !== id));
+  };
+
+  // USER
+  const handleCreateUser = async (payload) => {
+    const created = await createUser(payload);
+    await loadUsers();
+    return created;
+  };
+  const handleUpdateUser = async (id, payload) => {
+    const updated = await updateUser(id, payload);
+    await loadUsers();
+    return updated;
+  };
+  const handleDeleteUser = async (id) => {
+    await deleteUser(id);
+    await loadUsers();
+  };
+
+  // ENTITY
+  const handleCreateEntity = async (payload) => {
+    const created = await createEntity(payload);
+    setEntities((prev) => [...prev, created]);
+  };
+  const handleUpdateEntity = async (id, payload) => {
+    const updated = await updateEntity(id, payload);
+    setEntities((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
+  };
+  const handleDeleteEntity = async (id) => {
+    await deleteEntity(id);
+    setEntities((prev) => prev.filter((e) => e.id !== id));
+  };
+
+  // FUNDING SOURCE
+  const handleCreateFundingSource = async (payload) => {
+    const created = await createFundingSource(payload);
+    setFundingSources((prev) => [...prev, created]);
+  };
+  const handleUpdateFundingSource = async (id, payload) => {
+    const updated = await updateFundingSource(id, payload);
+    setFundingSources((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
+  };
+  const handleDeleteFundingSource = async (id) => {
+    await deleteFundingSource(id);
+    setFundingSources((prev) => prev.filter((f) => f.id !== id));
+  };
+
+
+  // ---------- ASSET ACTIONS (CREATE, EDIT, DELETE) ----------
   
-
-  //----------------LOKASI ---------------------
-    const handleCreateLocation = async (payload) => {
-      const created = await createLocation(payload);
-      setLocations((prev) => [...prev, created]);
-    };
-
-    const handleUpdateLocation = async (id, payload) => {
-      const updated = await updateLocation(id, payload);
-      setLocations((prev) =>
-        prev.map((l) => (l.id === updated.id ? updated : l))
-      );
-    };
-
-    const handleDeleteLocation = async (id) => {
-      await deleteLocation(id);
-      setLocations((prev) => prev.filter((l) => l.id !== id));
-    };
-
-
-
-    //------------------------------- Kategory ------------------------------
-    const handleCreateCategory = async (payload) => {
-      const created = await createCategory(payload);
-      setCategories((prev) => [...prev, created]);
-    };
-
-    const handleUpdateCategory = async (id, payload) => {
-      const updated = await updateCategory(id, payload);
-      setCategories((prev) =>
-        prev.map((c) => (c.id === updated.id ? updated : c))
-      );
-    };
-
-    const handleDeleteCategory = async (id) => {
-      await deleteCategory(id);
-      setCategories((prev) => prev.filter((c) => c.id !== id));
-    };
-
-    const handleCategoryChange = (value) => {
-      setFilterCategory(value);
-      setAssetPage(1);
-    };
-
-    const handleStatusChange = (value) => {
-      setFilterStatus(value);
-      setAssetPage(1);
-    };
-
-    const handleYearChange = (value) => {
-      setFilterYear(value);
-      setAssetPage(1);
-    };
-
-
-
-    //------------------------------- USER ------------------------------
-    const handleCreateUser = async (payload) => {
-      // payload: { name, email, password, role_ids: [] }
-      const created = await createUser(payload);
-      // supaya roles ikut ke-update, ambil ulang list user dari server
-      await loadUsers();
-      return created;
-    };
-
-    const handleUpdateUser = async (id, payload) => {
-      // payload: { name, email, password (opsional), role_ids: [] }
-      const updated = await updateUser(id, payload);
-      await loadUsers();
-      return updated;
-    };
-
-    const handleDeleteUser = async (id) => {
-      await deleteUser(id);   // soft delete di backend
-      await loadUsers();
-    };
-
-
-      // ---------- ENTITAS ----------
-    const handleCreateEntity = async (payload) => {
-      const created = await createEntity(payload);
-      setEntities((prev) => [...prev, created]);
-    };
-
-    const handleUpdateEntity = async (id, payload) => {
-      const updated = await updateEntity(id, payload);
-      setEntities((prev) =>
-        prev.map((e) => (e.id === updated.id ? updated : e))
-      );
-    };
-
-    const handleDeleteEntity = async (id) => {
-      await deleteEntity(id);
-      setEntities((prev) => prev.filter((e) => e.id !== id));
-    };
-
-    // ---------- SUMBER DANA HANDLERS ----------
-    const handleCreateFundingSource = async (payload) => {
-      const created = await createFundingSource(payload);
-      setFundingSources((prev) => [...prev, created]);
-    };
-
-    const handleUpdateFundingSource = async (id, payload) => {
-      const updated = await updateFundingSource(id, payload);
-      setFundingSources((prev) =>
-        prev.map((f) => (f.id === updated.id ? updated : f))
-      );
-    };
-
-    const handleDeleteFundingSource = async (id) => {
-      await deleteFundingSource(id);
-      setFundingSources((prev) => prev.filter((f) => f.id !== id));
-    };
-
-
-  // ---------- CREATE ASET ----------
   const handleCreateAsset = async (payload, photoFile, receiptFile) => {
     try {
-      // 1. buat aset dulu (kode aset digenerate di backend)
       let newAsset = await createAsset(payload);
-
-      // 2. upload foto aset (WAJIB dari frontend, tapi backend tetap dibuat aman)
-      if (photoFile) {
-        const updatedPhoto = await uploadAssetPhoto(newAsset.id, photoFile);
-        newAsset = updatedPhoto;
-      }
-
-      // 3. upload kwitansi pembelian
-      if (receiptFile) {
-        const updatedReceipt = await uploadAssetReceipt(
-          newAsset.id,
-          receiptFile
-        );
-        newAsset = updatedReceipt;
-      }
-
-      // 4. simpan aset ke state (sudah mengandung photo_url & receipt_url)
+      if (photoFile) newAsset = await uploadAssetPhoto(newAsset.id, photoFile);
+      if (receiptFile) newAsset = await uploadAssetReceipt(newAsset.id, receiptFile);
+      
       setAssets((prev) => [newAsset, ...prev]);
       return { success: true };
     } catch (err) {
       console.error(err);
       return { success: false, message: err.message };
     }
-  }
-
-
-  // ---------- PINJAM (OPEN MODAL) ----------
-  const handleBorrow = (asset) => {
-    setBorrowAssetTarget(asset);
-    setBorrowModalOpen(true);
   };
-
-  const handleSubmitBorrow = async (payload) => {
-    try {
-      setBorrowLoading(true);
-
-      // payload = data yang dikirim dari BorrowAssetModal
-      // Pastikan kita mengambil 'detail_location' dan 'notes' dari payload
-      
-      const res = await borrowAsset(borrowAssetTarget.id, {
-        borrower_user_id: payload.borrower_user_id,
-        usage_location_id: payload.usage_location_id,
-        due_date: payload.due_date || null,
-        
-        // --- BAGIAN INI WAJIB ADA AGAR DATA TIDAK KOSONG ---
-        detail_location: payload.detail_location, // Mengirim Detail Lokasi
-        notes: payload.notes,                     // Mengirim Catatan
-        condition_now: payload.condition_now      // Mengirim Kondisi
-        // ----------------------------------------------------
-      });
-
-      // Upload foto jika ada
-      if (payload.photo && res?.loan?.id) {
-        await uploadLoanBeforePhoto(res.loan.id, payload.photo);
-      }
-
-      // Update state aset di tabel utama secara langsung
-      if (res?.asset?.id) {
-        setAssets((prev) => 
-          prev.map((a) => (a.id === res.asset.id ? res.asset : a))
-        );
-      } else {
-        await loadAssets(); // Fallback reload jika response backend beda
-      }
-
-      await loadLoans(); // Refresh history
-
-      // Tutup modal
-      setBorrowModalOpen(false);
-      setBorrowAssetTarget(null);
-    } catch (err) {
-      console.error(err);
-      alert(err.message);
-    } finally {
-      setBorrowLoading(false);
-    }
-  };;
-
-  // ---------- FOTO ----------
-  const handleUploadPhoto = async (assetId, event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    try {
-      const updated = await uploadAssetPhoto(assetId, file);
-      setAssets((prev) =>
-        prev.map((a) => (a.id === updated.id ? updated : a))
-      );
-    } catch (err) {
-      console.error(err);
-    } finally {
-      event.target.value = "";
-    }
-  };
-
-  // ---------- FILTER ASET ----------
-  const filteredAssets = assets.filter((a) => {
-    const searchLower = search.toLowerCase();
-
-    const matchesFunding =
-      selectedFundingFilter === "all" ||
-      String(a.funding_source_id) === String(selectedFundingFilter);
-
-    const matchesSearch =
-      searchLower === "" ||
-      (a.name || "").toLowerCase().includes(searchLower) ||
-      (a.code || "").toLowerCase().includes(searchLower);
-
-    const matchesCondition =
-      filterCondition === "" ||
-      (a.condition || "").toLowerCase() === filterCondition.toLowerCase();
-
-    const matchesLocation =
-      filterLocation === "" ||
-      String(a.location_id) === String(filterLocation);
-
-    const matchesCategory =
-      filterCategory === "" ||
-      String(a.category_id) === String(filterCategory);
-
-    const matchesStatus =
-      filterStatus === "" ||
-      (a.status || "").toLowerCase() === filterStatus.toLowerCase();
-
-    const matchesYear =
-      filterYear === "" ||
-      (a.created_at &&
-        new Date(a.created_at).getFullYear().toString() === filterYear);
-
-    return (
-      matchesFunding &&
-      matchesSearch &&
-      matchesCondition &&
-      matchesLocation &&
-      matchesCategory &&
-      matchesStatus &&
-      matchesYear
-    );
-  });
-
-
-  // ---------- PAGINATION ASET ----------
-  const totalAssetPages =
-    filteredAssets.length === 0
-      ? 1
-      : Math.ceil(filteredAssets.length / ASSET_PAGE_SIZE);
-
-  // jaga-jaga kalau setelah filter halaman jadi kebanyakan
-  useEffect(() => {
-    if (assetPage > totalAssetPages) {
-      setAssetPage(totalAssetPages);
-    }
-  }, [assetPage, totalAssetPages]);
-
-  const paginatedAssets = filteredAssets.slice(
-    (assetPage - 1) * ASSET_PAGE_SIZE,
-    assetPage * ASSET_PAGE_SIZE
-  );
-
-  // ---------- REKAP SUMBER DANA ----------
-  const fundingSummary = fundingSources.map((fs) => {
-    const asetFs = assets.filter((a) => a.funding_source_id === fs.id);
-    const totalValue = asetFs.reduce((sum, a) => {
-      const v = Number(a.value);
-      if (Number.isNaN(v)) return sum;
-      return sum + v;
-    }, 0);
-    return {
-      id: fs.id,
-      name: fs.name,
-      count: asetFs.length,
-      totalValue,
-    };
-  });
-
-  const assetYears = Array.from(
-    new Set(
-      assets
-        .map((a) =>
-          a.created_at ? new Date(a.created_at).getFullYear().toString() : null
-        )
-        .filter(Boolean)
-    )
-  ).sort((a, b) => b.localeCompare(a)); // tahun terbaru dulu
-
-
-  // ---------- EXPORT CSV ----------
-  const handleExportCsv = () => {
-    const rows = filteredAssets; // Mengambil data yang sedang tampil/difilter
-
-    if (!rows.length) {
-      alert("Tidak ada data aset untuk diexport.");
-      return;
-    }
-
-    // Helper untuk ambil nama funding
-    const getFundingName = (id) => {
-      if (!id) return "-";
-      const f = fundingSources.find((x) => x.id === id);
-      return f ? f.name : "-";
-    };
-
-    // Helper untuk format tanggal excel-friendly (YYYY-MM-DD) atau Indo (DD/MM/YYYY)
-    const formatDate = (dateString) => {
-      if (!dateString) return "";
-      const date = new Date(dateString);
-      return date.toLocaleDateString("id-ID"); // Output: 20/12/2025
-    };
-
-    // Helper url
-    const getFullUrl = (path) => {
-      if (!path) return "";
-      return path.startsWith("http") ? path : `${API_BASE_URL}${path}`;
-    };
-
-    // 1. Definisikan Header
-    const header = [
-      "Nama Aset",
-      "Kode Aset",
-      "Kategori",
-      "Lokasi",
-      "Detail Lokasi",
-      "Kondisi",
-      "Status",
-      "Sumber Dana",
-      "Nilai (Rp)",
-      "Tanggal Pembelian",
-      "Link Foto Aset",     // Kolom Baru
-      "Link Kwitansi",      // Kolom Baru
-    ];
-
-    // 2. Mapping Data
-    const csvRows = [header];
-
-    rows.forEach((a) => {
-      // Cari nama kategori & lokasi manual jika perlu, atau kirim ID jika data lengkap ada di 'a'
-      // Asumsi a.location_id adalah ID, kita cari namanya di array locations
-      const locName = locations.find(l => l.id === a.location_id)?.name || "-";
-      const catName = categories.find(c => c.id === a.category_id)?.name || "-";
-
-      csvRows.push([
-        a.name || "",
-        a.code || "",
-        catName,
-        locName,
-        a.location || "", // Detail lokasi
-        a.condition || "",
-        a.status || "",
-        getFundingName(a.funding_source_id),
-        a.value ? String(a.value) : "0", // Biarkan angka agar bisa di-sum di Excel
-        formatDate(a.purchase_date || a.created_at),
-        getFullUrl(a.photo_url),   // URL Foto
-        getFullUrl(a.receipt_url), // URL Kwitansi
-      ]);
-    });
-
-    // 3. Convert ke CSV String
-    const csvString = csvRows
-      .map((row) =>
-        row
-          .map((cell) => {
-            // Escape tanda kutip (") agar format CSV tidak rusak
-            const stringCell = String(cell ?? "");
-            return `"${stringCell.replace(/"/g, '""')}"`;
-          })
-          .join(",") // Pemisah kolom koma
-      )
-      .join("\n"); // Pemisah baris
-
-    // 4. Download File dengan BOM (Byte Order Mark) agar Excel baca UTF-8
-    const blob = new Blob(["\uFEFF" + csvString], {
-      type: "text/csv;charset=utf-8;",
-    });
-
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    
-    // Nama file dinamis
-    const dateStr = new Date().toISOString().slice(0, 10);
-    link.download = `Data_Aset_SF_${dateStr}.csv`;
-    
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  // ---------- SIDEBAR MOBILE ----------
-  const openSidebar = () => {
-    setSidebarOpen(true);
-    setTimeout(() => setSidebarSlideIn(true), 10);
-  };
-
-  const closeSidebar = () => {
-    setSidebarSlideIn(false);
-    setTimeout(() => setSidebarOpen(false), 200);
-  };
-
-  const handleChangeMenu = (id) => {
-    setActiveMenu(id);
-    if (sidebarOpen) {
-      closeSidebar();
-    }
-  };
-
-  // ---------- HANDLER FILTER utk AssetsPage ----------
-  const handleSearchChange = (value) => {
-    setSearch(value);
-    setAssetPage(1);
-  };
-
-  const handleConditionChange = (value) => {
-    setFilterCondition(value);
-    setAssetPage(1);
-  };
-
-  const handleLocationChange = (value) => {
-    setFilterLocation(value);
-    setAssetPage(1);
-  };
-
-  const handleFundingFilterChange = (value) => {
-    setSelectedFundingFilter(value);
-    setAssetPage(1);
-  };
-
-  // ---------- LOGIN GATE ----------
-  if (!isLoggedIn) {
-    return <LoginPage onLoginSuccess={handleLogin} />;
-  }
-
-  // const handleReturn = async (asset) => {
-  // if (!window.confirm("Yakin aset ini sudah dikembalikan?")) return;
-
-  // try {
-  //   const updated = await returnAsset(asset.id);
-
-  //   setAssets((prev) =>
-  //     prev.map((a) => (a.id === updated.id ? updated : a))
-  //   );
-
-  //   await loadLoans();
-  // } catch (err) {
-  //   console.error(err);
-  //   alert(err.message);
-  // }
-  // };
-
-  const handleReturn = async (asset) => {
-    setReturnAssetTarget(asset);
-    setReturnModalOpen(true);
-  };
-  
-  const handleSubmitReturn = async (payload) => {
-    try {
-      setReturnLoading(true);
-
-      // --- PERBAIKAN DI SINI: KIRIM DATA LENGKAP KE API ---
-      const res = await returnAsset(returnAssetTarget.id, {
-        condition_after: payload.condition_after,
-        update_asset_location: payload.update_asset_location,
-        
-        // Data ini SEBELUMNYA HILANG, sekarang kita kirim:
-        return_location_id: payload.return_location_id,         
-        return_detail_location: payload.return_detail_location, 
-        notes_return: payload.notes_return                      
-      });
-      // ----------------------------------------------------
-
-      // Upload foto kondisi setelah kembali (jika ada)
-      if (payload.photo && res?.loan?.id) {
-        await uploadLoanAfterPhoto(res.loan.id, payload.photo);
-      }
-
-      // Update tabel aset secara real-time (Optimistic Update)
-      if (res?.asset?.id) {
-        setAssets((prev) =>
-          prev.map((a) => (a.id === res.asset.id ? res.asset : a))
-        );
-      } else {
-        await loadAssets(); // Fallback jika response backend beda struktur
-      }
-
-      await loadLoans(); // Refresh history
-
-      setReturnModalOpen(false);
-      setReturnAssetTarget(null);
-      // alert("Berhasil dikembalikan!"); // Opsional
-
-    } catch (err) {
-      console.error(err);
-      alert(err.message);
-    } finally {
-      setReturnLoading(false);
-    }
-  };
-
 
   const handleOpenEdit = (asset) => {
     setEditAssetTarget(asset);
     setEditModalOpen(true);
   };
 
-  // ---------- UPDATE ASET (PERBAIKAN) ----------
-  // Terima ID dari modal supaya sinkron
   const handleSubmitEdit = async (id, payload, photoFile, receiptFile) => {
     try {
       let updated = await updateAsset(id, payload);
-
-      // optional: kalau kamu mau edit juga bisa upload photo/receipt lagi
       if (photoFile) updated = await uploadAssetPhoto(updated.id, photoFile);
       if (receiptFile) updated = await uploadAssetReceipt(updated.id, receiptFile);
 
       setAssets((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
-
       setEditModalOpen(false);
       setEditAssetTarget(null);
       return { success: true };
@@ -874,7 +398,6 @@ function App() {
   const handleDeleteAsset = async (asset) => {
     try {
       await softDeleteAsset(asset.id);
-      // remove dari list (karena backend GET sudah filter deleted_at)
       setAssets((prev) => prev.filter((a) => a.id !== asset.id));
     } catch (err) {
       alert(err.message);
@@ -882,87 +405,263 @@ function App() {
   };
 
 
+  // ---------- BORROW & RETURN ----------
+  
+  const handleBorrow = (asset) => {
+    setBorrowAssetTarget(asset);
+    setBorrowModalOpen(true);
+  };
+
+  const handleSubmitBorrow = async (payload) => {
+    try {
+      setBorrowLoading(true);
+      const res = await borrowAsset(borrowAssetTarget.id, {
+        borrower_user_id: payload.borrower_user_id,
+        usage_location_id: payload.usage_location_id,
+        due_date: payload.due_date || null,
+        detail_location: payload.detail_location,
+        notes: payload.notes,
+        condition_now: payload.condition_now
+      });
+
+      if (payload.photo && res?.loan?.id) {
+        await uploadLoanBeforePhoto(res.loan.id, payload.photo);
+      }
+
+      // Optimistic Update
+      if (res?.asset?.id) {
+        setAssets((prev) => prev.map((a) => (a.id === res.asset.id ? res.asset : a)));
+      } else {
+        await loadAssets(); 
+      }
+      await loadLoans();
+
+      setBorrowModalOpen(false);
+      setBorrowAssetTarget(null);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setBorrowLoading(false);
+    }
+  };
+
+  const handleReturn = (asset) => {
+    setReturnAssetTarget(asset);
+    setReturnModalOpen(true);
+  };
+
+  const handleSubmitReturn = async (payload) => {
+    try {
+      setReturnLoading(true);
+      const res = await returnAsset(returnAssetTarget.id, {
+        condition_after: payload.condition_after,
+        update_asset_location: payload.update_asset_location,
+        return_location_id: payload.return_location_id,
+        return_detail_location: payload.return_detail_location,
+        notes_return: payload.notes_return
+      });
+
+      if (payload.photo && res?.loan?.id) {
+        await uploadLoanAfterPhoto(res.loan.id, payload.photo);
+      }
+
+      if (res?.asset?.id) {
+        setAssets((prev) => prev.map((a) => (a.id === res.asset.id ? res.asset : a)));
+      } else {
+        await loadAssets();
+      }
+      await loadLoans();
+
+      setReturnModalOpen(false);
+      setReturnAssetTarget(null);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setReturnLoading(false);
+    }
+  };
+
+
+  // ---------- FILTER & PAGINATION LOGIC ----------
+  
+  // Handler Filter Changes
+  const handleCategoryChange = (val) => { setFilterCategory(val); setAssetPage(1); };
+  const handleStatusChange = (val) => { setFilterStatus(val); setAssetPage(1); };
+  const handleYearChange = (val) => { setFilterYear(val); setAssetPage(1); };
+  const handleSearchChange = (val) => { setSearch(val); setAssetPage(1); };
+  const handleConditionChange = (val) => { setFilterCondition(val); setAssetPage(1); };
+  const handleLocationChange = (val) => { setFilterLocation(val); setAssetPage(1); };
+  const handleFundingFilterChange = (val) => { setSelectedFundingFilter(val); setAssetPage(1); };
+  const handleResetFilters = () => {
+    setSearch("");
+    setFilterCondition("");
+    setFilterLocation("");
+    setSelectedFundingFilter("all");
+    setFilterCategory("");
+    setFilterStatus("");
+    setFilterYear("");
+    setAssetPage(1);
+  };
+
+  // Filter Computation
+  const filteredAssets = assets.filter((a) => {
+    const searchLower = search.toLowerCase();
+    const matchesFunding = selectedFundingFilter === "all" || String(a.funding_source_id) === String(selectedFundingFilter);
+    const matchesSearch = searchLower === "" || (a.name || "").toLowerCase().includes(searchLower) || (a.code || "").toLowerCase().includes(searchLower);
+    const matchesCondition = filterCondition === "" || (a.condition || "").toLowerCase() === filterCondition.toLowerCase();
+    const matchesLocation = filterLocation === "" || String(a.location_id) === String(filterLocation);
+    const matchesCategory = filterCategory === "" || String(a.category_id) === String(filterCategory);
+    const matchesStatus = filterStatus === "" || (a.status || "").toLowerCase() === filterStatus.toLowerCase();
+    const matchesYear = filterYear === "" || (a.created_at && new Date(a.created_at).getFullYear().toString() === filterYear);
+
+    return matchesFunding && matchesSearch && matchesCondition && matchesLocation && matchesCategory && matchesStatus && matchesYear;
+  });
+
+  const totalAssetPages = filteredAssets.length === 0 ? 1 : Math.ceil(filteredAssets.length / ASSET_PAGE_SIZE);
+  
+  useEffect(() => {
+    if (assetPage > totalAssetPages) setAssetPage(totalAssetPages);
+  }, [assetPage, totalAssetPages]);
+
+  // Asset Years for Filter
+  const assetYears = Array.from(new Set(assets.map((a) => a.created_at ? new Date(a.created_at).getFullYear().toString() : null).filter(Boolean))).sort((a, b) => b.localeCompare(a));
+
+  // Funding Summary for Dashboard
+  const fundingSummary = fundingSources.map((fs) => {
+    const asetFs = assets.filter((a) => a.funding_source_id === fs.id);
+    const totalValue = asetFs.reduce((sum, a) => {
+      const v = Number(a.value);
+      return Number.isNaN(v) ? sum : sum + v;
+    }, 0);
+    return { id: fs.id, name: fs.name, count: asetFs.length, totalValue };
+  });
+
+
+  // ---------- EXPORT CSV & PRINT QR ----------
+  
+  const handlePrintQr = (asset) => setQrPrintAssets([asset]);
+  const handleBulkPrintQr = () => setQrPrintAssets(filteredAssets);
+
+  const handleExportCsv = () => {
+    const rows = filteredAssets;
+    if (!rows.length) {
+      alert("Tidak ada data aset untuk diexport.");
+      return;
+    }
+
+    const getFundingName = (id) => fundingSources.find((x) => x.id === id)?.name || "-";
+    const formatDate = (dateString) => dateString ? new Date(dateString).toLocaleDateString("id-ID") : "";
+    const getFullUrl = (path) => (!path ? "" : path.startsWith("http") ? path : `${API_BASE_URL}${path}`);
+
+    const header = ["Nama Aset", "Kode Aset", "Kategori", "Lokasi", "Detail Lokasi", "Kondisi", "Status", "Sumber Dana", "Nilai (Rp)", "Tanggal Pembelian", "Link Foto", "Link Kwitansi"];
+    const csvRows = [header];
+
+    rows.forEach((a) => {
+      const locName = locations.find(l => l.id === a.location_id)?.name || "-";
+      const catName = categories.find(c => c.id === a.category_id)?.name || "-";
+      csvRows.push([
+        a.name || "", a.code || "", catName, locName, a.location || "", 
+        a.condition || "", a.status || "", getFundingName(a.funding_source_id), 
+        a.value ? String(a.value) : "0", formatDate(a.purchase_date || a.created_at),
+        getFullUrl(a.photo_url), getFullUrl(a.receipt_url)
+      ]);
+    });
+
+    const csvString = csvRows.map(row => row.map(cell => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob(["\uFEFF" + csvString], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `Data_Aset_SF_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+
   // ---------- RENDER ----------
+  
+  if (!isLoggedIn) {
+    return <LoginPage onLoginSuccess={handleLogin} />;
+  }
+
+  // Helper untuk title header dinamis
+  const getPageTitle = () => {
+      switch(activeMenu) {
+          case 'dashboard': return "Executive Dashboard";
+          case 'assets': return "Manajemen Aset";
+          case 'funding': return "Sumber Dana";
+          case 'entities': return "Entitas & Unit";
+          case 'locations': return "Lokasi Aset";
+          case 'categories': return "Kategori Aset";
+          case 'roles': return "Roles & Hak Akses";
+          case 'users': return "Manajemen Pengguna";
+          case 'permissions': return "System Permissions";
+          default: return "Sinergi Foundation Inventaris";
+      }
+  };
+
+  // ---------- UPLOAD FOTO (LANGSUNG DARI TABEL) ----------
+  const handleUploadPhoto = async (assetId, event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const updated = await uploadAssetPhoto(assetId, file);
+      
+      // Update state assets agar foto langsung muncul tanpa refresh
+      setAssets((prev) =>
+        prev.map((a) => (a.id === updated.id ? updated : a))
+      );
+    } catch (err) {
+      console.error(err);
+      alert(err.message || "Gagal upload foto");
+    } finally {
+      // Reset input file agar bisa upload file yang sama jika perlu
+      event.target.value = "";
+    }
+  };
+
   return (
-    <div className="h-screen bg-slate-100 flex overflow-hidden">
-      {/* DESKTOP SIDEBAR */}
-      <div className="hidden md:flex md:flex-col md:h-full">
-        <Sidebar
-          activeMenu={activeMenu}
-          onChange={handleChangeMenu}
-          className="h-full"
-        />
+    <div className="flex h-screen bg-slate-50 font-sans overflow-hidden">
+      
+      {/* SIDEBAR (Desktop: Visible, Mobile: Toggle) */}
+      <div className={`
+        fixed inset-y-0 left-0 z-30 transform transition-transform duration-300 md:relative md:translate-x-0
+        ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
+      `}>
+         <Sidebar 
+           activeMenu={activeMenu} 
+           onChange={(id) => { 
+             setActiveMenu(id); 
+             setSidebarOpen(false); 
+           }} 
+         />
       </div>
 
-      {/* MOBILE SIDEBAR */}
+      {/* OVERLAY MOBILE */}
       {sidebarOpen && (
-        <div className="fixed inset-0 z-50 flex md:hidden">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={closeSidebar}
-          />
-          <div
-            className={
-              "relative transform transition-transform duration-200 ease-out " +
-              (sidebarSlideIn ? "translate-x-0" : "-translate-x-full")
-            }
-          >
-            <Sidebar
-              activeMenu={activeMenu}
-              onChange={handleChangeMenu}
-              className="h-full"
-            />
-          </div>
-        </div>
+        <div 
+          className="fixed inset-0 bg-black/50 z-20 md:hidden backdrop-blur-sm"
+          onClick={() => setSidebarOpen(false)}
+        />
       )}
 
-      {/* MAIN AREA */}
-      <div className="flex-1 flex flex-col min-h-0">
-        {/* TOP BAR */}
-        <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-6 flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="md:hidden inline-flex items-center justify-center px-2 py-1 border rounded text-xs text-slate-700 bg-slate-50"
-              onClick={openSidebar}
-            >
-              ☰
-            </button>
-            <span className="text-sm text-slate-500">
-              {activeMenu === "dashboard"
-                ? "Dashboard"
-                : activeMenu === "assets"
-                ? "Assets"
-                : activeMenu === "funding"
-                ? "Sumber Dana"
-                : activeMenu === "entities"
-                ? "Entitas"
-                : activeMenu === "locations"
-                ? "Lokasi"
-                : activeMenu === "categories"
-                ? "Kategori Aset"
-                : activeMenu === "roles"
-                ? "Roles & Hak Akses"
-                : activeMenu === "users"
-                ? "Users"
-                : "Permissions"}
-            </span>
-          </div>
-          <div className="flex items-center gap-3 text-xs text-slate-500">
-            <span>{auth.user?.name || "User"}</span>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="px-2 py-1 border rounded bg-slate-50 hover:bg-slate-100"
-            >
-              Logout
-            </button>
-          </div>
-        </header>
+      {/* MAIN CONTENT AREA */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+        
+        {/* HEADER MEWAH */}
+        <Header 
+          title={getPageTitle()}
+          onLogout={handleLogout}
+          onToggleSidebar={() => setSidebarOpen(true)}
+        />
 
-        {/* PAGE CONTENT */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">
-          <div className="w-full max-w-7xl mx-auto space-y-6">
+        {/* SCROLLABLE CONTENT */}
+        <main className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
+          <div className="max-w-7xl mx-auto space-y-6 pb-10">
+            
+            {/* VIEW QR PRINT MODE */}
             {qrPrintAssets ? (
               <QrPrintSheet
                 assets={qrPrintAssets}
@@ -972,6 +671,7 @@ function App() {
                 onBack={() => setQrPrintAssets(null)}
               />
             ) : (
+              // VIEW REGULAR PAGES
               <>
                 {activeMenu === "dashboard" && (
                   <DashboardPage
@@ -1003,7 +703,7 @@ function App() {
                     onStatusChange={handleStatusChange}
                     onYearChange={handleYearChange}
                     onResetFilters={handleResetFilters}
-                    onUploadPhoto={handleUploadPhoto}
+                    onUploadPhoto={handleUploadPhoto} // Note: This might need adjustment if using modal only
                     onBorrow={handleBorrow}
                     onReturn={handleReturn}
                     onShowDetail={setSelectedAsset}
@@ -1021,8 +721,6 @@ function App() {
                     onDeleteAsset={handleDeleteAsset}
                   />
                 )}
-
-
 
                 {activeMenu === "funding" && (
                   <FundingSourcePage
@@ -1090,48 +788,34 @@ function App() {
                     onDelete={handleDeleteEntity}
                   />
                 )}
+
+                {activeMenu === "import" && (
+                  <ImportPage />
+                )}
               </>
             )}
           </div>
         </main>
       </div>
 
-      {/* MODAL PREVIEW FOTO */}
+      {/* --- MODALS GLOBAL --- */}
+
+      {/* Modal Preview Foto */}
       {previewUrl && (
-        <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-40"
-          onClick={() => setPreviewUrl(null)}
-        >
-          <div
-            className="bg-white p-3 rounded-lg max-w-3xl max-h-[90vh]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <img
-              src={previewUrl}
-              alt="Preview aset"
-              className="max-h-[80vh] object-contain"
-            />
-            <div className="mt-2 flex justify-between items-center">
-              <button
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60]" onClick={() => setPreviewUrl(null)}>
+          <div className="bg-white p-2 rounded-lg max-w-4xl max-h-[90vh] relative" onClick={(e) => e.stopPropagation()}>
+            <img src={previewUrl} alt="Preview" className="max-h-[85vh] object-contain rounded" />
+            <button 
                 onClick={() => setPreviewUrl(null)}
-                className="px-3 py-1 text-sm bg-slate-800 text-white rounded"
-              >
-                Tutup
-              </button>
-              <a
-                href={previewUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-1 text-sm border rounded text-slate-700"
-              >
-                Buka di tab baru
-              </a>
-            </div>
+                className="absolute -top-4 -right-4 bg-red-600 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-lg hover:bg-red-700"
+            >
+                ✕
+            </button>
           </div>
         </div>
       )}
 
-      {/* MODAL DETAIL ASET */}
+      {/* Modal Detail Aset */}
       <AssetDetailModal
         asset={selectedAsset}
         loans={loans}
@@ -1141,7 +825,7 @@ function App() {
         onClose={() => setSelectedAsset(null)}
       />
 
-      {/* MODAL TAMBAH ASET (Create) */}
+      {/* Modal Tambah Aset */}
       <AddAssetModal
         open={addModalOpen}
         onClose={() => setAddModalOpen(false)}
@@ -1149,53 +833,44 @@ function App() {
         fundingSources={fundingSources}
         locations={locations}
         categories={categories}
+        mode="create"
       />
 
-      {/* MODAL PINJAM ASET */}
+      {/* Modal Edit Aset */}
+      <AddAssetModal
+        open={editModalOpen}
+        onClose={() => { setEditModalOpen(false); setEditAssetTarget(null); }}
+        onSaveAsset={handleSubmitEdit}
+        fundingSources={fundingSources}
+        locations={locations}
+        categories={categories}
+        mode="edit"
+        asset={editAssetTarget}
+      />
+
+      {/* Modal Pinjam */}
       <BorrowAssetModal
         open={borrowModalOpen}
         asset={borrowAssetTarget}
         users={users}
         locations={locations}
         loading={borrowLoading}
-        onClose={() => {
-          setBorrowModalOpen(false);
-          setBorrowAssetTarget(null);
-        }}
+        onClose={() => { setBorrowModalOpen(false); setBorrowAssetTarget(null); }}
         onSubmit={handleSubmitBorrow}
       />
 
+      {/* Modal Kembali */}
       <ReturnAssetModal
         open={returnModalOpen}
         asset={returnAssetTarget}
         locations={locations}
         loading={returnLoading}
-        onClose={() => {
-          setReturnModalOpen(false);
-          setReturnAssetTarget(null);
-        }}
+        onClose={() => { setReturnModalOpen(false); setReturnAssetTarget(null); }}
         onSubmit={handleSubmitReturn}
       />
-
-      {/* MODAL EDIT ASET (SUDAH DIPERBAIKI) */}
-      <AddAssetModal
-        open={editModalOpen}
-        onClose={() => {
-          setEditModalOpen(false);
-          setEditAssetTarget(null);
-        }}
-        onSaveAsset={handleSubmitEdit} // <-- Pakai onSaveAsset untuk edit
-        fundingSources={fundingSources}
-        locations={locations}
-        categories={categories}
-        mode="edit"
-        asset={editAssetTarget} // <-- Ganti initialData jadi asset agar terbaca
-      />
-
 
     </div>
   );
 }
-
 
 export default App;
